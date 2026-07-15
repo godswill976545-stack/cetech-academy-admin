@@ -1,25 +1,50 @@
 import { auth } from '@clerk/nextjs/server';
-import type { AdminUser } from '@/types';
+import type { AdminRole, AdminUser } from '@/types';
 
-/**
- * Resolve the current Clerk session and enforce an admin or staff role.
- * In production this should validate against the backend API / database,
- * checking the user's role (SUPER_ADMIN | ADMIN | STAFF) and track scopes.
- */
-export async function requireAdmin(): Promise<AdminUser | null> {
+const ADMIN_ROLES: AdminRole[] = ['ADMIN', 'SUPER_ADMIN'];
+const STAFF_ROLES: AdminRole[] = ['STAFF', 'ADMIN', 'SUPER_ADMIN'];
+
+interface ClerkMetadata {
+  role?: AdminRole;
+  assignedTracks?: string[];
+}
+
+function getRoleFromClaims(sessionClaims: Record<string, unknown> | null): ClerkMetadata {
+  const metadata = (sessionClaims?.metadata || {}) as Record<string, unknown>;
+  return {
+    role: (metadata.role as AdminRole) || undefined,
+    assignedTracks: Array.isArray(metadata.assignedTracks)
+      ? (metadata.assignedTracks as string[])
+      : [],
+  };
+}
+
+async function resolveUser(): Promise<AdminUser | null> {
   const { userId, sessionClaims } = await auth();
+  if (!userId) return null;
 
-  if (!userId) {
-    return null;
-  }
+  const { role, assignedTracks } = getRoleFromClaims(sessionClaims as Record<string, unknown> | null);
+  if (!role) return null;
 
-  // TODO: Replace with a real backend lookup that returns role + track scopes.
-  // For now, any authenticated Clerk user can access the admin shell during scaffolding.
   return {
     id: userId,
     email: (sessionClaims?.email as string) || '',
     fullName: (sessionClaims?.fullName as string) || '',
-    role: 'ADMIN',
-    assignedTracks: [],
+    role,
+    assignedTracks: assignedTracks || [],
   };
+}
+
+/** Require an admin or super-admin. */
+export async function requireAdmin(): Promise<AdminUser | null> {
+  const user = await resolveUser();
+  if (!user || !ADMIN_ROLES.includes(user.role)) return null;
+  return user;
+}
+
+/** Require staff, admin, or super-admin. */
+export async function requireStaff(): Promise<AdminUser | null> {
+  const user = await resolveUser();
+  if (!user || !STAFF_ROLES.includes(user.role)) return null;
+  return user;
 }
