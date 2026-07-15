@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter, Space_Grotesk } from 'next/font/google';
 import { ClerkProvider } from '@clerk/nextjs';
-import { MantineProvider, ColorSchemeScript, createTheme } from '@mantine/core';
+import { MantineProvider, createTheme } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
@@ -50,9 +50,6 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable}`} suppressHydrationWarning>
-      <head>
-        <ColorSchemeScript defaultColorScheme="dark" />
-      </head>
       <body className="antialiased" suppressHydrationWarning>
         <ClerkProvider>
           <MantineProvider theme={mantineTheme} defaultColorScheme="dark">
