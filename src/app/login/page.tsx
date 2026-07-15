@@ -21,27 +21,31 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
 
-    if (mode === 'signin') {
-      const { error: signInErr } = await signIn.password({
-        identifier: email.trim(),
-        password,
-      });
-
-      if (signInErr) {
-        setError('Invalid credentials.');
-        setLoading(false);
-        return;
-      }
-
-      // Role validation happens server-side in the admin layout.
-      // If the user is not an admin/staff, they will be redirected back to /login.
-      await signIn.finalize({ navigate: () => router.push('/dashboard') });
+    if (mode === 'signup') {
+      setError('Admin accounts are invite-only. Please contact a super-admin.');
+      setLoading(false);
       return;
     }
 
-    // Sign-up mode is disabled for admin portal — accounts must be invited.
-    setError('Admin accounts are invite-only. Please contact a super-admin.');
-    setLoading(false);
+    const { error: signInErr } = await signIn.password({
+      identifier: email.trim(),
+      password,
+    });
+
+    if (signInErr) {
+      setError('Invalid credentials.');
+      setLoading(false);
+      return;
+    }
+
+    if (signIn.status !== 'complete') {
+      setError('Additional verification required. Please check your email or contact support.');
+      setLoading(false);
+      return;
+    }
+
+    // Role validation happens server-side in the admin layout.
+    await signIn.finalize({ navigate: () => router.push('/dashboard') });
   };
 
   return (
