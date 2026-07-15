@@ -39,7 +39,9 @@ export default function LoginPage() {
     }
 
     if (signIn.status !== 'complete') {
-      setError('Additional verification required. Please check your email or contact support.');
+      // eslint-disable-next-line no-console
+      console.log('Clerk sign-in status:', signIn.status, signIn);
+      setError(`Sign-in status: ${signIn.status || 'unknown'}. Additional verification may be required.`);
       setLoading(false);
       return;
     }
