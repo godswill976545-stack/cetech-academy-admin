@@ -17,7 +17,6 @@ export default function LoginPage() {
           path="/login"
           signUpUrl="/login"
           fallbackRedirectUrl="/dashboard"
-          forceRedirectUrl="/dashboard"
           // Clerk's appearance types are permissive at runtime but strict in generated types.
           // Cast to `any` so we can theme inputs without fighting the type definitions.
           // eslint-disable-next-line @typescript-eslint/no-explicit-any

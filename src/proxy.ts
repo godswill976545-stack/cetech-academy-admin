@@ -2,7 +2,7 @@ import { clerkMiddleware } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const PUBLIC_PATHS = ['/login', '/api/webhook'];
+const PUBLIC_PATHS = ['/login', '/unauthorized', '/api/webhook'];
 
 function isPublicRoute(pathname: string): boolean {
   return PUBLIC_PATHS.some((prefix) => pathname.startsWith(prefix));
