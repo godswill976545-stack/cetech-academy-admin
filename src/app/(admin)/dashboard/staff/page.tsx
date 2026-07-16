@@ -23,30 +23,30 @@ export default function StaffPage() {
           Invite staff, assign tracks, and manage access. Staff see only students and content in their assigned tracks.
         </Text>
         <Table highlightOnHover>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Name</Table.Th>
-              <Table.Th>Email</Table.Th>
-              <Table.Th>Assigned Tracks</Table.Th>
-              <Table.Th>Status</Table.Th>
-              <Table.Th></Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Assigned Tracks</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
             {rows.map((row) => (
-              <Table.Tr key={row.email}>
-                <Table.Td>{row.name}</Table.Td>
-                <Table.Td>{row.email}</Table.Td>
-                <Table.Td>{row.tracks}</Table.Td>
-                <Table.Td>
+              <tr key={row.email}>
+                <td>{row.name}</td>
+                <td>{row.email}</td>
+                <td>{row.tracks}</td>
+                <td>
                   <Badge color="green">{row.status}</Badge>
-                </Table.Td>
-                <Table.Td>
+                </td>
+                <td>
                   <Button variant="subtle" size="xs" leftSection={<IconMail size={14} />}>Resend Invite</Button>
-                </Table.Td>
-              </Table.Tr>
+                </td>
+              </tr>
             ))}
-          </Table.Tbody>
+          </tbody>
         </Table>
       </Card>
     </div>

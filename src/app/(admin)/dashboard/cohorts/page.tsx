@@ -23,32 +23,32 @@ export default function CohortsPage() {
           Create cohorts, set capacity, schedule assessment slots, and record assessment outcomes.
         </Text>
         <Table highlightOnHover>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Cohort</Table.Th>
-              <Table.Th>Capacity</Table.Th>
-              <Table.Th>Enrolled</Table.Th>
-              <Table.Th>Start Date</Table.Th>
-              <Table.Th>Status</Table.Th>
-              <Table.Th></Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
+          <thead>
+            <tr>
+              <th>Cohort</th>
+              <th>Capacity</th>
+              <th>Enrolled</th>
+              <th>Start Date</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
             {rows.map((row) => (
-              <Table.Tr key={row.name}>
-                <Table.Td>{row.name}</Table.Td>
-                <Table.Td>{row.capacity}</Table.Td>
-                <Table.Td>{row.enrolled}</Table.Td>
-                <Table.Td>{row.start}</Table.Td>
-                <Table.Td>
+              <tr key={row.name}>
+                <td>{row.name}</td>
+                <td>{row.capacity}</td>
+                <td>{row.enrolled}</td>
+                <td>{row.start}</td>
+                <td>
                   <Badge color={row.status === 'open' ? 'green' : 'gray'}>{row.status}</Badge>
-                </Table.Td>
-                <Table.Td>
+                </td>
+                <td>
                   <Button variant="subtle" size="xs" leftSection={<IconUsers size={14} />}>Manage</Button>
-                </Table.Td>
-              </Table.Tr>
+                </td>
+              </tr>
             ))}
-          </Table.Tbody>
+          </tbody>
         </Table>
       </Card>
     </div>

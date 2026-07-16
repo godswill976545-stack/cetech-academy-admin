@@ -24,32 +24,32 @@ export default function PaymentsPage() {
           Reconcile gateway events, view the append-only ledger, and issue receipts. Webhooks are the source of truth.
         </Text>
         <Table highlightOnHover>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Invoice</Table.Th>
-              <Table.Th>Student</Table.Th>
-              <Table.Th>Amount</Table.Th>
-              <Table.Th>Date</Table.Th>
-              <Table.Th>Status</Table.Th>
-              <Table.Th></Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
+          <thead>
+            <tr>
+              <th>Invoice</th>
+              <th>Student</th>
+              <th>Amount</th>
+              <th>Date</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
             {rows.map((row) => (
-              <Table.Tr key={row.id}>
-                <Table.Td>{row.id}</Table.Td>
-                <Table.Td>{row.student}</Table.Td>
-                <Table.Td>{row.amount}</Table.Td>
-                <Table.Td>{row.date}</Table.Td>
-                <Table.Td>
+              <tr key={row.id}>
+                <td>{row.id}</td>
+                <td>{row.student}</td>
+                <td>{row.amount}</td>
+                <td>{row.date}</td>
+                <td>
                   <Badge color={row.status === 'paid' ? 'green' : 'yellow'}>{row.status}</Badge>
-                </Table.Td>
-                <Table.Td>
+                </td>
+                <td>
                   <Button variant="subtle" size="xs" leftSection={<IconReceipt size={14} />}>Receipt</Button>
-                </Table.Td>
-              </Table.Tr>
+                </td>
+              </tr>
             ))}
-          </Table.Tbody>
+          </tbody>
         </Table>
       </Card>
     </div>

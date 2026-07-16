@@ -24,32 +24,32 @@ export default function StudentsPage() {
           View, filter, and manage all enrolled students. Track-scoped staff see only their assigned tracks.
         </Text>
         <Table highlightOnHover>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Student ID</Table.Th>
-              <Table.Th>Name</Table.Th>
-              <Table.Th>Track</Table.Th>
-              <Table.Th>Cohort</Table.Th>
-              <Table.Th>Status</Table.Th>
-              <Table.Th></Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
+          <thead>
+            <tr>
+              <th>Student ID</th>
+              <th>Name</th>
+              <th>Track</th>
+              <th>Cohort</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
             {rows.map((row) => (
-              <Table.Tr key={row.id}>
-                <Table.Td>{row.id}</Table.Td>
-                <Table.Td>{row.name}</Table.Td>
-                <Table.Td>{row.track}</Table.Td>
-                <Table.Td>{row.cohort}</Table.Td>
-                <Table.Td>
+              <tr key={row.id}>
+                <td>{row.id}</td>
+                <td>{row.name}</td>
+                <td>{row.track}</td>
+                <td>{row.cohort}</td>
+                <td>
                   <Badge color={row.status === 'active' ? 'green' : 'yellow'}>{row.status}</Badge>
-                </Table.Td>
-                <Table.Td>
+                </td>
+                <td>
                   <Button variant="subtle" size="xs" leftSection={<IconEye size={14} />}>View</Button>
-                </Table.Td>
-              </Table.Tr>
+                </td>
+              </tr>
             ))}
-          </Table.Tbody>
+          </tbody>
         </Table>
       </Card>
     </div>
