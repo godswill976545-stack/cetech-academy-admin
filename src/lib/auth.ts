@@ -1,4 +1,4 @@
-import { auth } from '@clerk/nextjs/server';
+import { currentUser } from '@clerk/nextjs/server';
 import type { AdminRole, AdminUser } from '@/types';
 
 const ADMIN_ROLES: AdminRole[] = ['ADMIN', 'SUPER_ADMIN'];
@@ -9,44 +9,30 @@ interface ClerkPublicMetadata {
   assignedTracks?: string[];
 }
 
-function getRoleFromClaims(sessionClaims: Record<string, unknown> | null): ClerkPublicMetadata {
-  // Clerk JWT stores public metadata under `public_metadata`.
-  const metadata = (sessionClaims?.public_metadata || {}) as Record<string, unknown>;
-  return {
-    role: (metadata.role as AdminRole) || undefined,
-    assignedTracks: Array.isArray(metadata.assignedTracks)
-      ? (metadata.assignedTracks as string[])
-      : [],
-  };
-}
-
 export async function resolveUser(): Promise<{ user: AdminUser | null; isAuthenticated: boolean }> {
-  const { userId, sessionClaims } = await auth();
-  const isAuthenticated = !!userId;
+  const user = await currentUser();
+  const isAuthenticated = !!user;
 
-  if (!userId) {
+  if (!user) {
     return { user: null, isAuthenticated: false };
   }
 
-  const { role, assignedTracks } = getRoleFromClaims(sessionClaims as Record<string, unknown> | null);
+  const metadata = (user.publicMetadata || {}) as ClerkPublicMetadata;
+  const role = metadata.role;
+
   if (!role) {
     return { user: null, isAuthenticated: true };
   }
 
-  const fullName = [
-    sessionClaims?.first_name as string | undefined,
-    sessionClaims?.last_name as string | undefined,
-  ]
-    .filter(Boolean)
-    .join(' ');
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ');
 
   return {
     user: {
-      id: userId,
-      email: (sessionClaims?.email as string) || '',
+      id: user.id,
+      email: user.emailAddresses[0]?.emailAddress || '',
       fullName,
       role,
-      assignedTracks: assignedTracks || [],
+      assignedTracks: metadata.assignedTracks || [],
     },
     isAuthenticated: true,
   };
