@@ -1,16 +1,29 @@
-import { Title, Text, Card, Badge, Table, Group, Button } from '@mantine/core';
-import { IconEye } from '@tabler/icons-react';
+'use client';
 
-export const metadata = {
-  title: 'Students',
-};
+import { Title, Text, Card, Badge, Table, Group, Button, Loader, Alert, Center } from '@mantine/core';
+import { IconEye, IconAlertCircle } from '@tabler/icons-react';
+import { useStudents } from '@/lib/hooks';
 
 export default function StudentsPage() {
-  const rows = [
-    { id: 'CET-26A-SWE-0042', name: 'Chidi Okonkwo', track: 'Software Engineering', status: 'active', cohort: 'Q3 2026' },
-    { id: 'CET-26A-UXD-0018', name: 'Adaobi Nwosu', track: 'UI/UX Design', status: 'active', cohort: 'Q3 2026' },
-    { id: 'CET-26A-GMK-0007', name: 'Ngozi Eze', track: 'Growth Marketing', status: 'payment_due', cohort: 'Q3 2026' },
-  ];
+  const { data, isLoading, error } = useStudents();
+
+  if (isLoading) {
+    return (
+      <Center className="min-h-[60vh]">
+        <Loader color="brand" size="xl" />
+      </Center>
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert icon={<IconAlertCircle size={16} />} title="Error loading students" color="red">
+        {error.message}
+      </Alert>
+    );
+  }
+
+  const rows = data?.data || [];
 
   return (
     <div>
@@ -23,34 +36,38 @@ export default function StudentsPage() {
         <Text c="dimmed" size="sm" className="mb-4">
           View, filter, and manage all enrolled students. Track-scoped staff see only their assigned tracks.
         </Text>
-        <Table highlightOnHover>
-          <thead>
-            <tr>
-              <th>Student ID</th>
-              <th>Name</th>
-              <th>Track</th>
-              <th>Cohort</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id}>
-                <td>{row.id}</td>
-                <td>{row.name}</td>
-                <td>{row.track}</td>
-                <td>{row.cohort}</td>
-                <td>
-                  <Badge color={row.status === 'active' ? 'green' : 'yellow'}>{row.status}</Badge>
-                </td>
-                <td>
-                  <Button variant="subtle" size="xs" leftSection={<IconEye size={14} />}>View</Button>
-                </td>
+        {rows.length === 0 ? (
+          <Text c="dimmed" className="text-center py-8">No students found</Text>
+        ) : (
+          <Table highlightOnHover>
+            <thead>
+              <tr>
+                <th>Student ID</th>
+                <th>Name</th>
+                <th>Track</th>
+                <th>Cohort</th>
+                <th>Status</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </Table>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.id}>
+                  <td>{row.id}</td>
+                  <td>{row.name}</td>
+                  <td>{row.track}</td>
+                  <td>{row.cohort}</td>
+                  <td>
+                    <Badge color={row.status === 'active' ? 'green' : 'yellow'}>{row.status}</Badge>
+                  </td>
+                  <td>
+                    <Button variant="subtle" size="xs" leftSection={<IconEye size={14} />}>View</Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
       </Card>
     </div>
   );

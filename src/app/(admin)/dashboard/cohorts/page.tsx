@@ -1,15 +1,27 @@
-import { Title, Text, Card, Table, Badge, Group, Button } from '@mantine/core';
-import { IconUsers } from '@tabler/icons-react';
+'use client';
 
-export const metadata = {
-  title: 'Cohorts',
-};
+import { Title, Text, Card, Table, Badge, Group, Button, Loader, Alert, Center } from '@mantine/core';
+import { IconUsers, IconAlertCircle } from '@tabler/icons-react';
+import { useCohorts } from '@/lib/hooks';
 
 export default function CohortsPage() {
-  const rows = [
-    { name: 'Q3 2026', capacity: 30, enrolled: 28, status: 'open', start: '2026-09-01' },
-    { name: 'Q4 2026', capacity: 30, enrolled: 0, status: 'planning', start: '2026-12-01' },
-  ];
+  const { data: rows = [], isLoading, error } = useCohorts();
+
+  if (isLoading) {
+    return (
+      <Center className="min-h-[60vh]">
+        <Loader color="brand" size="xl" />
+      </Center>
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert icon={<IconAlertCircle size={16} />} title="Error loading cohorts" color="red">
+        {error.message}
+      </Alert>
+    );
+  }
 
   return (
     <div>
@@ -22,34 +34,40 @@ export default function CohortsPage() {
         <Text c="dimmed" size="sm" className="mb-4">
           Create cohorts, set capacity, schedule assessment slots, and record assessment outcomes.
         </Text>
-        <Table highlightOnHover>
-          <thead>
-            <tr>
-              <th>Cohort</th>
-              <th>Capacity</th>
-              <th>Enrolled</th>
-              <th>Start Date</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.name}>
-                <td>{row.name}</td>
-                <td>{row.capacity}</td>
-                <td>{row.enrolled}</td>
-                <td>{row.start}</td>
-                <td>
-                  <Badge color={row.status === 'open' ? 'green' : 'gray'}>{row.status}</Badge>
-                </td>
-                <td>
-                  <Button variant="subtle" size="xs" leftSection={<IconUsers size={14} />}>Manage</Button>
-                </td>
+        {rows.length === 0 ? (
+          <Text c="dimmed" className="text-center py-8">No cohorts found</Text>
+        ) : (
+          <Table highlightOnHover>
+            <thead>
+              <tr>
+                <th>Cohort</th>
+                <th>Capacity</th>
+                <th>Enrolled</th>
+                <th>Start Date</th>
+                <th>Status</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </Table>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.id}>
+                  <td>{row.name}</td>
+                  <td>{row.capacity}</td>
+                  <td>{row.enrolled}</td>
+                  <td>{new Date(row.startDate).toLocaleDateString()}</td>
+                  <td>
+                    <Badge color={row.status === 'open' ? 'green' : row.status === 'planning' ? 'blue' : 'gray'}>
+                      {row.status}
+                    </Badge>
+                  </td>
+                  <td>
+                    <Button variant="subtle" size="xs" leftSection={<IconUsers size={14} />}>Manage</Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
       </Card>
     </div>
   );

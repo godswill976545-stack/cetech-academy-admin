@@ -1,31 +1,44 @@
-import { Title, Text, Card, Tree, Group, Button } from '@mantine/core';
-import { IconPlus } from '@tabler/icons-react';
+'use client';
 
-export const metadata = {
-  title: 'Content',
-};
-
-const contentTree = [
-  {
-    label: 'UI/UX Design',
-    value: 'ui-ux',
-    children: [
-      { label: 'Module 1: Introduction', value: 'm1' },
-      { label: 'Module 2: Design Systems', value: 'm2' },
-      { label: 'Module 3: Prototyping', value: 'm3' },
-    ],
-  },
-  {
-    label: 'Software Engineering',
-    value: 'swe',
-    children: [
-      { label: 'Module 1: Foundations', value: 'swe-m1' },
-      { label: 'Module 2: Frontend', value: 'swe-m2' },
-    ],
-  },
-];
+import { Title, Text, Card, Tree, Group, Button, Loader, Alert, Center } from '@mantine/core';
+import { IconPlus, IconAlertCircle } from '@tabler/icons-react';
+import { useCurriculum } from '@/lib/hooks';
 
 export default function ContentPage() {
+  const { data: modules = [], isLoading, error } = useCurriculum();
+
+  if (isLoading) {
+    return (
+      <Center className="min-h-[60vh]">
+        <Loader color="brand" size="xl" />
+      </Center>
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert icon={<IconAlertCircle size={16} />} title="Error loading curriculum" color="red">
+        {error.message}
+      </Alert>
+    );
+  }
+
+  // Group modules by track
+  const tracks = modules.reduce((acc, mod) => {
+    if (!acc[mod.track]) acc[mod.track] = [];
+    acc[mod.track].push(mod);
+    return acc;
+  }, {} as Record<string, typeof modules>);
+
+  const treeData = Object.entries(tracks).map(([track, mods]) => ({
+    label: track,
+    value: track,
+    children: mods.map((mod) => ({
+      label: `${mod.title} (${mod.status})`,
+      value: mod.id,
+    })),
+  }));
+
   return (
     <div>
       <Group justify="space-between" className="mb-6">
@@ -37,7 +50,11 @@ export default function ContentPage() {
         <Text c="dimmed" size="sm" className="mb-4">
           Manage curriculum templates, lessons, quizzes, and exams. Track-scoped staff can author for their assigned tracks; admins publish.
         </Text>
-        <Tree data={contentTree} />
+        {treeData.length === 0 ? (
+          <Text c="dimmed" className="text-center py-8">No curriculum modules found</Text>
+        ) : (
+          <Tree data={treeData} />
+        )}
       </Card>
     </div>
   );

@@ -3,6 +3,7 @@ import { Inter, Space_Grotesk } from 'next/font/google';
 import { ClerkProvider } from '@clerk/nextjs';
 import { MantineProvider, createTheme } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
+import { Providers } from '@/components/Providers';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import '@mantine/dates/styles.css';
@@ -57,10 +58,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           signInFallbackRedirectUrl="/dashboard"
           signUpFallbackRedirectUrl="/dashboard"
         >
-          <MantineProvider theme={mantineTheme} defaultColorScheme="dark">
-            <Notifications position="top-right" zIndex={1000} />
-            {children}
-          </MantineProvider>
+          <Providers>
+            <MantineProvider theme={mantineTheme} defaultColorScheme="dark">
+              <Notifications position="top-right" zIndex={1000} />
+              {children}
+            </MantineProvider>
+          </Providers>
         </ClerkProvider>
       </body>
     </html>
