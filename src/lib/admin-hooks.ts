@@ -197,6 +197,20 @@ export function useUpdateSettings() {
   });
 }
 
+// Curriculum Hooks
+export function useCurriculum(filters?: { track?: string; level?: string }) {
+  return useQuery({
+    queryKey: ['admin', 'curriculum', filters],
+    queryFn: async () => {
+      const { data } = await api.get<CurriculumModule[]>('/admin/curriculum', {
+        params: filters,
+      });
+      return data;
+    },
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+}
+
 // Role-based access control hook
 export function useCanAccess(resource: string, action: string) {
   // This will use the auth store to check permissions

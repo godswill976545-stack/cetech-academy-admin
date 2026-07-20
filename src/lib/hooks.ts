@@ -18,3 +18,4 @@ export { useInviteStaff } from './admin-hooks';
 
 // Re-export utility hooks
 export { useCanAccess } from './admin-hooks';
+export { useCurriculum } from './admin-hooks';
