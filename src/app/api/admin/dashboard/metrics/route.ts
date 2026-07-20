@@ -4,87 +4,84 @@ import { createMainRepoAdminClient } from '@/lib/supabase/admin';
 
 export const GET = withAdminAuth(async (_req: NextRequest) => {
   const supabase = createMainRepoAdminClient();
-  
-  // Get comprehensive dashboard metrics from the main repo database
-  
-  // 1. Total users (all roles)
-  const { data: users, count: userCount, error: usersError } = await supabase
+
+  // 1. Total users
+  const { count: userCount } = await supabase
     .from('users')
-    .select('*', { count: 'exact' });
-  
-  // 2. Total applications (enrollment funnel)
-  const { data: applications, count: applicationCount, error: applicationsError } = await supabase
+    .select('id', { count: 'exact', head: true });
+
+  // 2. Total applications
+  const { count: applicationCount } = await supabase
     .from('applications')
-    .select('*', { count: 'exact' });
-  
-  // 3. Total payments
-  const { data: ledgerEntries, error: ledgerError } = await supabase
+    .select('id', { count: 'exact', head: true });
+
+  // 3. Revenue from ledger entries
+  const { data: ledgerEntries } = await supabase
     .from('ledger_entries')
     .select('amount, currency, type');
-  
+
   // 4. Active cohorts
-  const { data: cohorts, count: cohortCount, error: cohortsError } = await supabase
+  const { data: cohorts, count: cohortCount } = await supabase
     .from('cohorts')
-    .select('*', { count: 'exact' })
+    .select('id, enrolled, capacity', { count: 'exact' })
     .eq('status', 'OPEN');
-  
-  // 5. Quiz results for completion rate calculation
-  const { data: quizResults, error: quizError } = await supabase
+
+  // 5. Quiz results for completion rate
+  const { data: quizResults } = await supabase
     .from('quiz_results')
     .select('passed');
-  
-  // 6. Recent activity
+
+  // 6. Recent activity (no join — fetch users separately)
   const { data: recentActivity } = await supabase
     .from('audit_log')
-    .select(`
-      id,
-      actor_id,
-      action,
-      target,
-      target_id,
-      created_at,
-      users!inner(full_name, email)
-    `)
+    .select('id, actor_id, action, target, target_id, created_at')
     .order('created_at', { ascending: false })
     .limit(10);
-  
+
+  // Fetch actor info for activity
+  const actorIds = [...new Set(recentActivity?.map(log => log.actor_id).filter(Boolean) || [])];
+  let actorMap: Record<string, { full_name: string; email: string }> = {};
+  if (actorIds.length > 0) {
+    const { data: actors } = await supabase
+      .from('users')
+      .select('clerk_id, full_name, email')
+      .in('clerk_id', actorIds);
+    actorMap = actors?.reduce((acc, u) => { acc[u.clerk_id] = u; return acc; }, {}) || {};
+  }
+
   // Calculate metrics
-  const totalStudents = users?.filter(u => u.role === 'STUDENT').length || 0;
+  const totalStudents = userCount || 0;
   const applicationsCount = applicationCount || 0;
-  
-  // Calculate revenue from ledger entries
+
   const revenueMTD = ledgerEntries?.
-    filter(entry => entry.type === 'TUITION')
-    .reduce((sum, entry) => sum + parseFloat(entry.amount), 0) || 0;
-  
-  // Calculate cohort statistics
+    filter((entry: any) => entry.type === 'TUITION')
+    .reduce((sum: number, entry: any) => sum + parseFloat(entry.amount), 0) || 0;
+
   const totalCohorts = cohortCount || 0;
-  const enrolledStudents = cohorts?.reduce((sum, cohort) => sum + cohort.enrolled, 0) || 0;
-  
-  // Calculate completion rate from quiz results
+
   const totalQuizzes = quizResults?.length || 0;
-  const passedQuizzes = quizResults?.filter(qr => qr.passed).length || 0;
+  const passedQuizzes = quizResults?.filter((qr: any) => qr.passed).length || 0;
   const completionRate = totalQuizzes > 0 ? (passedQuizzes / totalQuizzes) * 100 : 0;
-  
-  // Calculate cohort progression metrics
+
   const onTrack = cohorts?.
-    filter(cohort => cohort.enrolled >= 20 && cohort.enrolled <= cohort.capacity * 0.8)
-    .length || 0;
-  
+    filter((c: any) => c.enrolled >= 20 && c.enrolled <= c.capacity * 0.8).length || 0;
+
   const atRisk = cohorts?.
-    filter(cohort => cohort.enrolled < 15 || cohort.enrolled > cohort.capacity * 0.9)
-    .length || 0;
-  
-  const inactive = cohorts?.length - onTrack - atRisk || 0;
-  
+    filter((c: any) => c.enrolled < 15 || c.enrolled > c.capacity * 0.9).length || 0;
+
+  const inactive = (cohorts?.length || 0) - onTrack - atRisk;
+
   // Format activity log
-  const formattedActivity = recentActivity?.map(item => ({
-    id: item.id,
-    description: `${item.users?.full_name || item.users?.email} ${item.action} ${item.target} at ${new Date(item.created_at).toLocaleString()}`, // Simplified description
-    userId: item.actor_id,
-    createdAt: item.created_at,
-  })) || [];
-  
+  const formattedActivity = recentActivity?.map(item => {
+    const actor = actorMap[item.actor_id];
+    return {
+      id: item.id,
+      description: `${actor?.full_name || actor?.email || 'System'} ${item.action} ${item.target}`,
+      userId: item.actor_id,
+      createdAt: item.created_at,
+    };
+  }) || [];
+
   return NextResponse.json({
     success: true,
     data: {

@@ -6,26 +6,34 @@ export function withAdminAuth(
   handler: (req: NextRequest, supabase: any, user: any) => Promise<NextResponse>
 ) {
   return async (req: NextRequest) => {
-    const { user, isAuthenticated } = await requireAdmin();
-    
-    if (!user) {
+    try {
+      const { user, isAuthenticated } = await requireAdmin();
+
+      if (!user) {
+        return NextResponse.json(
+          { success: false, error: isAuthenticated ? 'Forbidden' : 'Unauthorized' },
+          { status: isAuthenticated ? 403 : 401 }
+        );
+      }
+
+      const supabase = createMainRepoAdminClient();
+
+      // Best-effort audit log (non-blocking)
+      supabase.from('audit_log').insert({
+        actor_id: user.id,
+        action: 'API_CALL',
+        target: req.nextUrl.pathname,
+        target_id: req.nextUrl.searchParams.get('id'),
+        ip: req.headers.get('x-forwarded-for') || 'unknown',
+      }).catch((err: any) => console.error('Audit log insert failed:', err));
+
+      return await handler(req, supabase, user);
+    } catch (err) {
+      console.error('withAdminAuth error:', err);
       return NextResponse.json(
-        { success: false, error: isAuthenticated ? 'Forbidden' : 'Unauthorized' },
-        { status: isAuthenticated ? 403 : 401 }
+        { success: false, error: 'Internal server error' },
+        { status: 500 }
       );
     }
-    
-    const supabase = createMainRepoAdminClient();
-    
-    // Create audit log entry
-    await supabase.from('audit_log').insert({
-      actor_id: user.id,
-      action: 'API_CALL',
-      target: req.nextUrl.pathname,
-      target_id: req.nextUrl.searchParams.get('id'),
-      ip: req.headers.get('x-forwarded-for') || 'unknown',
-    });
-    
-    return handler(req, supabase, user);
   };
 }

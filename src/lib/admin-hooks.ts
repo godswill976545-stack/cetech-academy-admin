@@ -18,8 +18,8 @@ export function useDashboardMetrics() {
   return useQuery({
     queryKey: ['admin', 'dashboard', 'metrics'],
     queryFn: async () => {
-      const { data } = await api.get<DashboardMetrics>('/admin/dashboard/metrics');
-      return data;
+      const { data: res } = await api.get<{ data: DashboardMetrics; activity: ActivityLog[] }>('/admin/dashboard/metrics');
+      return res.data;
     },
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
@@ -29,10 +29,10 @@ export function useActivityLog(limit?: number) {
   return useQuery({
     queryKey: ['admin', 'dashboard', 'activity', limit],
     queryFn: async () => {
-      const { data } = await api.get<ActivityLog[]>('/admin/dashboard/activity', {
+      const { data: res } = await api.get<{ data: ActivityLog[] }>('/admin/dashboard/activity', {
         params: { limit },
       });
-      return data;
+      return res.data;
     },
     staleTime: 1000 * 60 * 2, // 2 minutes
   });
@@ -43,12 +43,12 @@ export function useStudents(page = 1, pageSize = 20, filters?: { track?: string;
   return useQuery({
     queryKey: ['admin', 'students', page, pageSize, filters],
     queryFn: async () => {
-      const { data } = await api.get<Student[]>('/admin/students', {
+      const { data: res } = await api.get<{ data: Student[] }>('/admin/students', {
         params: { page, pageSize, ...filters },
       });
-      return data;
+      return res.data;
     },
-    staleTime: 1000 * 60 * 2, // 2 minutes
+    staleTime: 1000 * 60 * 2,
   });
 }
 
@@ -56,8 +56,8 @@ export function useCreateAdminUser() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (user: { email: string; fullName: string; role: string; assignedTracks?: string[] }) => {
-      const { data } = await api.post<AdminUser>('/admin/students', user);
-      return data;
+      const { data: res } = await api.post<{ data: AdminUser }>('/admin/students', user);
+      return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'students'] });
@@ -70,12 +70,12 @@ export function useApplications(page = 1, pageSize = 20, filters?: { status?: st
   return useQuery({
     queryKey: ['admin', 'applications', page, pageSize, filters],
     queryFn: async () => {
-      const { data } = await api.get<Application[]>('/admin/applications', {
+      const { data: res } = await api.get<{ data: Application[] }>('/admin/applications', {
         params: { page, pageSize, ...filters },
       });
-      return data;
+      return res.data;
     },
-    staleTime: 1000 * 60 * 2, // 2 minutes
+    staleTime: 1000 * 60 * 2,
   });
 }
 
@@ -83,10 +83,10 @@ export function useScheduleApplication() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ applicationId, assessmentSlotId }: { applicationId: string; assessmentSlotId: string }) => {
-      const { data } = await api.post<{ success: boolean }>(`/admin/applications/${applicationId}/schedule`, {
+      const { data: res } = await api.post<{ data: { success: boolean } }>(`/admin/applications/${applicationId}/schedule`, {
         assessmentSlotId,
       });
-      return data;
+      return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'applications'] });
@@ -99,10 +99,10 @@ export function useCohorts() {
   return useQuery({
     queryKey: ['admin', 'cohorts'],
     queryFn: async () => {
-      const { data } = await api.get<Cohort[]>('/admin/cohorts');
-      return data;
+      const { data: res } = await api.get<{ data: Cohort[] }>('/admin/cohorts');
+      return res.data;
     },
-    staleTime: 1000 * 60 * 2, // 2 minutes
+    staleTime: 1000 * 60 * 2,
   });
 }
 
@@ -110,8 +110,8 @@ export function useCreateCohort() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (cohort: Partial<Cohort>) => {
-      const { data } = await api.post<Cohort>('/admin/cohorts', cohort);
-      return data;
+      const { data: res } = await api.post<{ data: Cohort }>('/admin/cohorts', cohort);
+      return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'cohorts'] });
@@ -124,10 +124,10 @@ export function useStaff() {
   return useQuery({
     queryKey: ['admin', 'staff'],
     queryFn: async () => {
-      const { data } = await api.get<StaffMember[]>('/admin/staff');
-      return data;
+      const { data: res } = await api.get<{ data: StaffMember[] }>('/admin/staff');
+      return res.data;
     },
-    staleTime: 1000 * 60 * 2, // 2 minutes
+    staleTime: 1000 * 60 * 2,
   });
 }
 
@@ -135,8 +135,8 @@ export function useInviteStaff() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (staff: { email: string; role: string; assignedTracks?: string[] }) => {
-      const { data } = await api.post<StaffMember>('/admin/staff/invite', staff);
-      return data;
+      const { data: res } = await api.post<{ data: StaffMember }>('/admin/staff/invite', staff);
+      return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'staff'] });
@@ -149,12 +149,12 @@ export function usePayments(page = 1, pageSize = 20, filters?: { status?: string
   return useQuery({
     queryKey: ['admin', 'payments', page, pageSize, filters],
     queryFn: async () => {
-      const { data } = await api.get<Payment[]>('/admin/payments', {
+      const { data: res } = await api.get<{ data: Payment[] }>('/admin/payments', {
         params: { page, pageSize, ...filters },
       });
-      return data;
+      return res.data;
     },
-    staleTime: 1000 * 60 * 2, // 2 minutes
+    staleTime: 1000 * 60 * 2,
   });
 }
 
@@ -162,8 +162,8 @@ export function useRecordPayment() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payment: Partial<Payment>) => {
-      const { data } = await api.post<Payment>('/admin/payments/manual', payment);
-      return data;
+      const { data: res } = await api.post<{ data: Payment }>('/admin/payments/manual', payment);
+      return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'payments'] });
@@ -177,10 +177,10 @@ export function useSettings() {
   return useQuery({
     queryKey: ['admin', 'settings'],
     queryFn: async () => {
-      const { data } = await api.get<Settings>('/admin/settings');
-      return data;
+      const { data: res } = await api.get<{ data: Settings }>('/admin/settings');
+      return res.data;
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 1000 * 60 * 5,
   });
 }
 
@@ -188,8 +188,8 @@ export function useUpdateSettings() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (settings: Partial<Settings>) => {
-      const { data } = await api.patch<Settings>('/admin/settings', settings);
-      return data;
+      const { data: res } = await api.patch<{ data: Settings }>('/admin/settings', settings);
+      return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] });
@@ -202,12 +202,12 @@ export function useCurriculum(filters?: { track?: string; level?: string }) {
   return useQuery({
     queryKey: ['admin', 'curriculum', filters],
     queryFn: async () => {
-      const { data } = await api.get<CurriculumModule[]>('/admin/curriculum', {
+      const { data: res } = await api.get<{ data: CurriculumModule[] }>('/admin/curriculum', {
         params: filters,
       });
-      return data;
+      return res.data;
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 1000 * 60 * 5,
   });
 }
 

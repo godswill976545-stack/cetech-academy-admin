@@ -7,8 +7,7 @@ export const GET = withAdminAuth(async (_req: NextRequest) => {
   const { searchParams } = new URL(_req.url);
   const track = searchParams.get('track');
   const status = searchParams.get('status');
-  
-  // Start building the query - join tracks table
+
   let query = supabase
     .from('cohorts')
     .select(`
@@ -23,20 +22,20 @@ export const GET = withAdminAuth(async (_req: NextRequest) => {
       assessment_date,
       assessment_time,
       created_at,
-      tracks!inner(id, name, slug)
+      tracks(id, name, slug)
     `, { count: 'exact' })
     .order('created_at', { ascending: false });
-  
+
   if (track) {
     query = query.eq('track_id', track);
   }
-  
+
   if (status) {
     query = query.eq('status', status);
   }
-  
+
   const { data: cohorts, error, count } = await query;
-  
+
   if (error) {
     console.error('Error fetching cohorts:', error);
     return NextResponse.json(
@@ -44,41 +43,37 @@ export const GET = withAdminAuth(async (_req: NextRequest) => {
       { status: 500 }
     );
   }
-  
-  // Get application counts for each cohort
+
+  // Count applications per cohort individually (correct way to get counts)
   const cohortIds = cohorts?.map(c => c.id) || [];
-  let applicationCounts = {};
-  
-  if (cohortIds.length > 0) {
-    const { data: applications } = await supabase
+  const applicationCounts: Record<string, number> = {};
+
+  for (const cid of cohortIds) {
+    const { count: appCount } = await supabase
       .from('applications')
-      .select('cohort_id', { count: 'exact' })
-      .in('cohort_id', cohortIds)
+      .select('id', { count: 'exact', head: true })
+      .eq('cohort_id', cid)
       .eq('status', 'ASSESSED');
-    
-    applicationCounts = applications?.reduce((acc, app) => {
-      acc[app.cohort_id] = app.count;
-      return acc;
-    }, {}) || {};
+    applicationCounts[cid] = appCount || 0;
   }
-  
-  // Transform cohorts to match expected interface
+
+  // Transform to match Cohort interface
   const transformedCohorts = cohorts?.map(cohort => ({
     id: cohort.id,
     name: cohort.name,
-    track: cohort.tracks?.name || 'Unknown',
+    track: (cohort.tracks as any)?.name || 'Unknown',
     trackId: cohort.track_id,
     capacity: cohort.capacity,
     enrolled: cohort.enrolled,
     startDate: cohort.start_date,
     endDate: cohort.end_date,
-    status: cohort.status,
+    status: cohort.status?.toLowerCase() || 'planning',
     assessmentDate: cohort.assessment_date,
     assessmentTime: cohort.assessment_time,
     createdAt: cohort.created_at,
     applicationCount: applicationCounts[cohort.id] || 0,
   })) || [];
-  
+
   return NextResponse.json({
     success: true,
     data: transformedCohorts,
@@ -90,32 +85,29 @@ export const GET = withAdminAuth(async (_req: NextRequest) => {
 
 export const POST = withAdminAuth(async (req: NextRequest) => {
   const { name, trackId, capacity, startDate, endDate, assessmentDate, assessmentTime } = await req.json();
-  
+
   const supabase = createMainRepoAdminClient();
-  
-  // Validate required fields
+
   if (!name || !trackId) {
     return NextResponse.json(
       { success: false, error: 'Name and track are required' },
       { status: 400 }
     );
   }
-  
-  // Check if track exists in main repo
+
   const { data: track, error: trackError } = await supabase
     .from('tracks')
     .select('id, name, slug')
     .eq('id', trackId)
     .single();
-  
+
   if (!track || trackError) {
     return NextResponse.json(
       { success: false, error: 'Track not found in main database' },
       { status: 404 }
     );
   }
-  
-  // Create cohort
+
   const { data: cohort, error } = await supabase
     .from('cohorts')
     .insert({
@@ -131,7 +123,7 @@ export const POST = withAdminAuth(async (req: NextRequest) => {
     })
     .select()
     .single();
-  
+
   if (error) {
     console.error('Error creating cohort:', error);
     return NextResponse.json(
@@ -139,16 +131,7 @@ export const POST = withAdminAuth(async (req: NextRequest) => {
       { status: 500 }
     );
   }
-  
-  // Create audit log entry
-  await supabase.from('audit_log').insert({
-    actor_id: 'current_admin_id', // Should be from auth context
-    action: 'CREATE',
-    target: 'cohort',
-    target_id: cohort.id,
-    after: cohort,
-  });
-  
+
   return NextResponse.json(
     { success: true, data: cohort },
     { status: 201 }

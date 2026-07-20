@@ -6,8 +6,7 @@ export const GET = withAdminAuth(async (_req: NextRequest) => {
   const supabase = createMainRepoAdminClient();
   const { searchParams } = new URL(_req.url);
   const track = searchParams.get('track');
-  
-  // Get users with admin/staff roles
+
   let query = supabase
     .from('users')
     .select(`
@@ -23,13 +22,13 @@ export const GET = withAdminAuth(async (_req: NextRequest) => {
     `, { count: 'exact' })
     .in('role', ['ADMIN', 'STAFF', 'SUPER_ADMIN'])
     .order('created_at', { ascending: false });
-  
+
   if (track) {
     query = query.contains('assigned_tracks', [track]);
   }
-  
+
   const { data: users, error, count } = await query;
-  
+
   if (error) {
     console.error('Error fetching staff:', error);
     return NextResponse.json(
@@ -37,19 +36,19 @@ export const GET = withAdminAuth(async (_req: NextRequest) => {
       { status: 500 }
     );
   }
-  
-  // Transform users to staff format
+
+  // Transform — lowercase roles to match StaffMember type
   const transformedStaff = users?.map(user => ({
     id: user.id,
     name: user.full_name || user.email.split('@')[0],
     email: user.email,
-    role: user.role,
+    role: user.role?.toLowerCase() || 'staff',
     assignedTracks: user.assigned_tracks || [],
     studentCode: user.student_code,
-    status: user.payment_status === 'paid' ? 'active' : 'invited',
+    status: user.is_verified ? 'active' : 'invited',
     createdAt: user.created_at,
   })) || [];
-  
+
   return NextResponse.json({
     success: true,
     data: transformedStaff,
