@@ -9,6 +9,12 @@ function isPublicRoute(pathname: string): boolean {
 }
 
 export default clerkMiddleware(async (auth, req: NextRequest) => {
+  // Skip Clerk auth for admin API routes — they handle their own
+  // auth via withAdminAuth() which calls Clerk server-side.
+  if (req.nextUrl.pathname.startsWith('/api/admin')) {
+    return NextResponse.next();
+  }
+
   if (isPublicRoute(req.nextUrl.pathname)) {
     return NextResponse.next();
   }
