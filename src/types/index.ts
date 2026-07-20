@@ -96,3 +96,27 @@ export interface PaginatedResponse<T> {
   page: number;
   pageSize: number;
 }
+
+export interface Application {
+  id: string;
+  userId: string;
+  trackId: string;
+  cohortId: string | null;
+  status: 'APPLIED' | 'ASSESSED' | 'OFFER' | 'ENROLLED' | 'REJECTED' | 'WITHDRAWN';
+  declaredTrack: string;
+  declaredLevel: string;
+  createdAt: string;
+  user?: { fullName: string; email: string };
+  track?: { name: string };
+  cohort?: { name: string };
+}
+
+export interface Settings {
+  id: string;
+  maxStudentsPerCohort: number;
+  assessmentPassRate: number;
+  scholarshipPercentage: number;
+  currency: string;
+  timezone: string;
+  updatedAt: string;
+}

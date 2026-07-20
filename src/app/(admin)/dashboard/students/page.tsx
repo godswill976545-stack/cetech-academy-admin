@@ -23,7 +23,7 @@ export default function StudentsPage() {
     );
   }
 
-  const rows = data?.data || [];
+  const rows = Array.isArray(data) ? data : [];
 
   return (
     <div>

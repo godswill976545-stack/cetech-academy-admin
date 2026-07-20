@@ -1,5 +1,5 @@
 import { currentUser } from '@clerk/nextjs/server';
-import type { AdminUser } from '@/types';
+import type { AdminUser, AdminRole } from '@/types';
 
 const ADMIN_ROLES: AdminRole[] = ['ADMIN', 'SUPER_ADMIN'];
 const STAFF_ROLES: AdminRole[] = ['STAFF', 'ADMIN', 'SUPER_ADMIN'];
