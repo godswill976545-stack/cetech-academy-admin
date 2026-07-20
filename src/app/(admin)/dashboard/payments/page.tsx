@@ -23,7 +23,7 @@ export default function PaymentsPage() {
     );
   }
 
-  const rows = data?.data || [];
+  const rows = Array.isArray(data) ? data : [];
 
   return (
     <div>
