@@ -19,13 +19,17 @@ export function withAdminAuth(
       const supabase = createMainRepoAdminClient();
 
       // Best-effort audit log (non-blocking)
-      supabase.from('audit_log').insert({
-        actor_id: user.id,
-        action: 'API_CALL',
-        target: req.nextUrl.pathname,
-        target_id: req.nextUrl.searchParams.get('id'),
-        ip: req.headers.get('x-forwarded-for') || 'unknown',
-      }).catch((err: any) => console.error('Audit log insert failed:', err));
+      try {
+        await supabase.from('audit_log').insert({
+          actor_id: user.id,
+          action: 'API_CALL',
+          target: req.nextUrl.pathname,
+          target_id: req.nextUrl.searchParams.get('id'),
+          ip: req.headers.get('x-forwarded-for') || 'unknown',
+        });
+      } catch (auditErr) {
+        console.error('Audit log insert failed:', auditErr);
+      }
 
       return await handler(req, supabase, user);
     } catch (err) {
