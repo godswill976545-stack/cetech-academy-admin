@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import { Inter, Space_Grotesk } from 'next/font/google';
-import { ClerkProvider } from '@clerk/nextjs';
 import { MantineProvider, createTheme } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import { Providers } from '@/components/Providers';
@@ -52,19 +51,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable}`} suppressHydrationWarning>
       <body className="antialiased" suppressHydrationWarning>
-        <ClerkProvider
-          signInUrl="/login"
-          signUpUrl="/login"
-          signInFallbackRedirectUrl="/dashboard"
-          signUpFallbackRedirectUrl="/dashboard"
-        >
-          <Providers>
-            <MantineProvider theme={mantineTheme} defaultColorScheme="dark">
-              <Notifications position="top-right" zIndex={1000} />
-              {children}
-            </MantineProvider>
-          </Providers>
-        </ClerkProvider>
+        <Providers>
+          <MantineProvider theme={mantineTheme} defaultColorScheme="dark">
+            <Notifications position="top-right" zIndex={1000} />
+            {children}
+          </MantineProvider>
+        </Providers>
       </body>
     </html>
   );

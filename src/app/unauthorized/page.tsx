@@ -1,15 +1,14 @@
 'use client';
 
 import { Container, Card, Title, Text, Button } from '@mantine/core';
-import { useClerk } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 
 export default function UnauthorizedPage() {
-  const { signOut } = useClerk();
   const router = useRouter();
 
   const handleSignOut = async () => {
-    await signOut({ redirectUrl: '/login' });
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.push('/login');
   };
 
   return (

@@ -1,57 +1,60 @@
-import { currentUser } from '@clerk/nextjs/server';
-import type { AdminUser, AdminRole } from '@/types';
+import { NextRequest } from 'next/server';
+import { cookies } from 'next/headers';
+import { verifyAccessToken } from '@/lib/auth-utils';
+import { createMainRepoAdminClient } from '@/lib/supabase/admin';
+import type { AdminUser } from '@/types';
 
-const ADMIN_ROLES: AdminRole[] = ['ADMIN', 'SUPER_ADMIN'];
-const STAFF_ROLES: AdminRole[] = ['STAFF', 'ADMIN', 'SUPER_ADMIN'];
+const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN'];
+const STAFF_ROLES = ['STAFF', 'ADMIN', 'SUPER_ADMIN', 'TUTOR'];
 
-interface ClerkPublicMetadata {
-  role?: AdminRole;
-  assignedTracks?: string[];
-}
+async function getUserFromToken(token: string): Promise<{ user: AdminUser | null; isAuthenticated: boolean }> {
+  const payload = await verifyAccessToken(token);
+  if (!payload) return { user: null, isAuthenticated: false };
 
-export async function resolveUser(): Promise<{ user: AdminUser | null; isAuthenticated: boolean }> {
-  const clerkUser = await currentUser();
-  const isAuthenticated = !!clerkUser;
+  const supabase = createMainRepoAdminClient();
+  const { data: dbUser, error } = await supabase
+    .from('users')
+    .select('id, email, full_name, role, assigned_tracks')
+    .eq('id', payload.userId)
+    .single();
 
-  if (!clerkUser) {
-    return { user: null, isAuthenticated: false };
-  }
-
-  const metadata = (clerkUser.publicMetadata || {}) as ClerkPublicMetadata;
-  const role = metadata.role;
-
-  if (!role) {
-    return { user: null, isAuthenticated: true };
-  }
-
-  const fullName = [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ');
+  if (error || !dbUser) return { user: null, isAuthenticated: true };
 
   return {
     user: {
-      id: clerkUser.id,
-      email: clerkUser.emailAddresses[0]?.emailAddress || '',
-      fullName,
-      role,
-      assignedTracks: metadata.assignedTracks || [],
+      id: dbUser.id,
+      email: dbUser.email,
+      fullName: dbUser.full_name || dbUser.email.split('@')[0],
+      role: dbUser.role,
+      assignedTracks: dbUser.assigned_tracks || [],
     },
     isAuthenticated: true,
   };
 }
 
-/** Require an admin or super-admin. */
-export async function requireAdmin(): Promise<{ user: AdminUser | null; isAuthenticated: boolean }> {
-  const { user, isAuthenticated } = await resolveUser();
-  if (!user || !ADMIN_ROLES.includes(user.role)) {
-    return { user: null, isAuthenticated };
-  }
+// For API routes — reads token from NextRequest cookies
+export async function resolveUser(req?: NextRequest): Promise<{ user: AdminUser | null; isAuthenticated: boolean }> {
+  const token = req?.cookies?.get('admin_access_token')?.value;
+  if (!token) return { user: null, isAuthenticated: false };
+  return getUserFromToken(token);
+}
+
+// For server components — reads token from next/headers cookies()
+export async function resolveUserFromCookies(): Promise<{ user: AdminUser | null; isAuthenticated: boolean }> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get('admin_access_token')?.value;
+  if (!token) return { user: null, isAuthenticated: false };
+  return getUserFromToken(token);
+}
+
+export async function requireAdmin(req?: NextRequest): Promise<{ user: AdminUser | null; isAuthenticated: boolean }> {
+  const { user, isAuthenticated } = req ? await resolveUser(req) : await resolveUserFromCookies();
+  if (!user || !ADMIN_ROLES.includes(user.role)) return { user: null, isAuthenticated };
   return { user, isAuthenticated: true };
 }
 
-/** Require staff, admin, or super-admin. */
-export async function requireStaff(): Promise<{ user: AdminUser | null; isAuthenticated: boolean }> {
-  const { user, isAuthenticated } = await resolveUser();
-  if (!user || !STAFF_ROLES.includes(user.role)) {
-    return { user: null, isAuthenticated };
-  }
+export async function requireStaff(req?: NextRequest): Promise<{ user: AdminUser | null; isAuthenticated: boolean }> {
+  const { user, isAuthenticated } = req ? await resolveUser(req) : await resolveUserFromCookies();
+  if (!user || !STAFF_ROLES.includes(user.role)) return { user: null, isAuthenticated };
   return { user, isAuthenticated: true };
 }

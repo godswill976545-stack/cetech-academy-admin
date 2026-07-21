@@ -34,11 +34,13 @@ Both apps share the **same Supabase Postgres database**.
 | Framework | Next.js 16 (App Router, Turbopack) |
 | Language | TypeScript |
 | UI Library | Mantine v7 + Tailwind CSS v4 |
-| Auth | Clerk (role-based: SUPER_ADMIN, ADMIN, STAFF) |
+| Auth | **Custom invite-only system** — JWT + httpOnly cookies, bcrypt, role-based (SUPER_ADMIN, ADMIN, TUTOR) |
 | Database | Supabase Postgres (shared with main cetech-academy repo) |
 | Data Fetching | TanStack React Query + Axios |
 | State | Zustand (client auth state) |
 | Hosting | Vercel (production) |
+| JWT Library | jose (edge-runtime compatible) |
+| Password Hashing | bcryptjs (12 salt rounds) |
 
 ---
 
@@ -57,28 +59,42 @@ cetech-academy-admin/
 │   │   │   ├── staff/page.tsx
 │   │   │   ├── content/page.tsx      # Curriculum management
 │   │   │   └── settings/page.tsx
-│   │   ├── api/admin/                # All API routes
-│   │   │   ├── dashboard/
-│   │   │   │   ├── metrics/route.ts  # Dashboard analytics
-│   │   │   │   └── activity/route.ts # Audit log feed
-│   │   │   ├── students/route.ts
-│   │   │   ├── applications/route.ts
-│   │   │   ├── cohorts/route.ts
-│   │   │   ├── payments/route.ts
-│   │   │   ├── staff/route.ts
-│   │   │   ├── curriculum/route.ts
-│   │   │   └── settings/route.ts
-│   │   ├── login/[[...rest]]/page.tsx # Clerk login
+│   │   ├── api/
+│   │   │   ├── auth/                 # Auth routes (login, logout, refresh, me)
+│   │   │   │   ├── login/route.ts
+│   │   │   │   ├── logout/route.ts
+│   │   │   │   ├── refresh/route.ts
+│   │   │   │   └── me/route.ts
+│   │   │   └── admin/               # Protected admin API routes
+│   │   │       ├── dashboard/
+│   │   │       │   ├── metrics/route.ts
+│   │   │       │   └── activity/route.ts
+│   │   │       ├── students/route.ts
+│   │   │       ├── applications/route.ts
+│   │   │       ├── cohorts/route.ts
+│   │   │       ├── payments/route.ts
+│   │   │       ├── staff/route.ts
+│   │   │       ├── curriculum/route.ts
+│   │   │       ├── settings/route.ts
+│   │   │       ├── invitations/route.ts
+│   │   │       ├── invite/accept/route.ts
+│   │   │       └── change-password/route.ts
+│   │   ├── login/page.tsx            # Custom login page
+│   │   ├── invite/accept/page.tsx    # Public invite acceptance page
 │   │   └── unauthorized/page.tsx
 │   ├── lib/
 │   │   ├── api-handler.ts            # withAdminAuth middleware
-│   │   ├── auth.ts                   # Clerk role resolution
+│   │   ├── auth.ts                   # Custom auth resolution (JWT + DB lookup)
+│   │   ├── auth-utils.ts             # JWT signing, password hashing, invite tokens
+│   │   ├── session.ts                # Session management (cookies + DB)
 │   │   ├── api.ts                    # Axios client
 │   │   ├── hooks.ts                  # Re-exports all hooks
 │   │   ├── admin-hooks.ts            # TanStack Query hooks
 │   │   └── supabase/admin.ts         # Service-role Supabase client
 │   ├── types/index.ts                # TypeScript interfaces
-│   └── proxy.ts                      # Clerk middleware
+│   └── proxy.ts                      # Custom auth middleware (JWT verification)
+├── supabase/migrations/
+│   └── 009_custom_admin_auth.sql     # Migration for password_hash, invitations, sessions
 ├── .env.local                        # Environment variables
 ├── next.config.ts
 ├── package.json
@@ -87,24 +103,71 @@ cetech-academy-admin/
 
 ---
 
-## 5. How Auth Works
+## 5. How Auth Works (Custom System)
+
+No Clerk. Fully internal invite-only auth with JWT + httpOnly cookies.
+
+### Flow
 
 ```
-Browser → Clerk Login → JWT Cookie → Next.js Middleware (proxy.ts)
-                                          ↓
-                                    /api/admin/* → skip Clerk, handle auth in route
-                                    /dashboard/* → Clerk protect()
-                                          ↓
-                                    withAdminAuth() in api-handler.ts
-                                          ↓
-                                    Resolve Clerk user → Check publicMetadata.role
-                                          ↓
-                                    SUPER_ADMIN / ADMIN → allowed
-                                    STAFF → allowed (read-only routes)
-                                    No role → 403 Forbidden
+Super Admin / Admin → Invite Staff → Link generated → Staff opens link → Sets password → Auto-login → Dashboard
 ```
 
-**Key detail:** The Clerk middleware (`proxy.ts`) explicitly skips `/api/admin/*` routes because those routes handle their own auth via `withAdminAuth()`. This was a critical fix — without it, all API routes returned 404.
+### Detailed Auth Flow
+
+```
+proxy.ts (middleware)
+  ↓
+  Public paths: /login, /invite/accept, /api/auth/* → pass through
+  /api/admin/* → verify admin_access_token cookie → 401 if invalid
+  /dashboard/* → verify admin_access_token cookie → redirect to /login if invalid
+```
+
+### API Route Auth
+
+```
+withAdminAuth() in api-handler.ts
+  ↓
+  Read cookies (req.cookies for API routes, cookies() for server components)
+  ↓
+  Verify access token → fetch user from DB → check role
+  ↓
+  SUPER_ADMIN / ADMIN → allowed
+  TUTOR → allowed (read-only routes)
+  No role → 403 Forbidden
+```
+
+### Role Hierarchy
+
+| Role | Can Invite |
+|------|-----------|
+| SUPER_ADMIN | SUPER_ADMIN, ADMIN, TUTOR |
+| ADMIN | TUTOR only |
+| TUTOR | Cannot invite anyone |
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/lib/auth-utils.ts` | hashPassword, verifyPassword, generateAccessToken (15min), generateRefreshToken (7d), generateInviteToken |
+| `src/lib/session.ts` | createSession (set cookies + DB), destroySession, refreshSession (token rotation) |
+| `src/lib/auth.ts` | getUserFromToken, resolveUser, requireAdmin, requireStaff |
+| `src/proxy.ts` | Reads access_token cookie, verifies JWT, blocks unauthorized requests |
+
+### Cookies
+
+| Cookie | Path | Max Age | Purpose |
+|--------|------|---------|---------|
+| `admin_access_token` | `/` | 15 minutes | Short-lived JWT for API auth |
+| `admin_refresh_token` | `/api/auth/refresh` | 7 days | Long-lived JWT for token rotation |
+
+Both cookies are `httpOnly`, `secure`, `sameSite=lax`.
+
+### Password Policy
+- Minimum 8 characters
+- Stored as bcrypt hash (12 salt rounds)
+- No forgot password flow
+- Password change only inside dashboard when logged in (`/api/admin/change-password`)
 
 ---
 
@@ -125,26 +188,29 @@ createClient(
 
 | Table | Purpose |
 |-------|---------|
-| `users` | All users (students + staff). Has `role`, `assigned_tracks`, `clerk_id` columns |
+| `users` | All users (students + staff). Has `role`, `assigned_tracks`, `password_hash` columns |
 | `tracks` | 6 disciplines (UI/UX, Software Eng, etc.) |
 | `cohorts` | Class groups (max 30 students, linked to track) |
 | `applications` | Enrollment funnel: APPLIED → ASSESSED → OFFER → ENROLLED → ACTIVE |
 | `invoices` | Payment records (linked to student + cohort) |
 | `ledger_entries` | Append-only financial ledger |
-| `audit_log` | All admin actions logged here (actor_id is Clerk user ID) |
+| `audit_log` | All admin actions logged here |
 | `courses` | Course catalog (title, description, price) |
 | `units` | Course units (linked to courses) |
 | `lessons` | Individual lessons (linked to units) |
 | `admin_settings` | Portal config (providers, policies) |
 | `quiz_results` | Student quiz attempts |
 | `enrollments` | Student-course enrollment records |
+| `admin_invitations` | Pending staff invitations (token, role, expiry) |
+| `admin_sessions` | Active sessions (refresh tokens, user_agent, expiry) |
 
 ### ⚠️ Important Schema Notes
 
-- `audit_log.actor_id` is a **Clerk string ID** (e.g. `user_2abc123`), NOT a UUID. There is **no foreign key** to `users`. To get actor info, join via `users.clerk_id`.
+- `audit_log.actor_id` — use `users.id` (UUID). To get actor info, join via `users`.
 - `courses` has **no `level` or `track_id` columns**. Don't query for them.
 - `users` has **no `status` column**. Use `payment_status` instead.
 - Cohort/application statuses are **UPPERCASE** in DB (`OPEN`, `PLANNING`, `APPLIED`, `ASSESSED`), but the API transforms them to **lowercase** for the UI.
+- `users.password_hash` is nullable — only set after a user accepts an invitation.
 
 ---
 
@@ -154,56 +220,80 @@ All set in Vercel dashboard under **Settings → Environment Variables**:
 
 | Variable | Value | Notes |
 |----------|-------|-------|
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | `pk_test_...` | Clerk publishable key |
-| `CLERK_SECRET_KEY` | `sk_test_...` | Clerk secret key (server-only) |
+| `ACCESS_TOKEN_SECRET` | `your-random-secret` | JWT signing secret for access tokens (min 32 chars) |
+| `REFRESH_TOKEN_SECRET` | `your-random-secret` | JWT signing secret for refresh tokens (min 32 chars) |
 | `NEXT_PUBLIC_MAIN_REPO_SUPABASE_URL` | `https://kohlegvunumiwxbhfbwb.supabase.co` | Main repo Supabase URL |
 | `MAIN_REPO_SUPABASE_SERVICE_ROLE_KEY` | `eyJ...` | Service-role key (bypasses RLS) |
 | `NEXT_PUBLIC_SITE_URL` | `https://cetech-academy-admin.vercel.app` | Production URL |
 | `NEXT_PUBLIC_API_URL` | `https://cetech-academy-admin.vercel.app/api` | API base URL |
 | `NEXT_PUBLIC_ADMIN_API_URL` | `https://cetech-academy-admin.vercel.app/api` | Same as above |
-| `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | `/login` | |
-| `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | `/login` | |
-| `NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL` | `/dashboard` | |
-| `NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL` | `/dashboard` | |
 
-**⚠️ Security:** The `MAIN_REPO_SUPABASE_SERVICE_ROLE_KEY` bypasses ALL Row-Level Security. Never expose it to the client. Never commit it to git.
+**⚠️ Security:** The `MAIN_REPO_SUPABASE_SERVICE_ROLE_KEY` bypasses ALL Row-Level Security. Never expose it to the client. Never commit it to git. The JWT secrets must also be kept secret and never exposed to the client.
 
 ---
 
-## 8. Clerk Configuration
+## 8. Invite Flow
 
-In the Clerk Dashboard (https://dashboard.clerk.com):
+### How Invitations Work
 
-### Paths (Configure → Developers → Paths)
-- **Fallback development host:** `https://cetech-academy-admin.vercel.app`
-- **Home URL:** `/dashboard`
-- **SignIn:** Sign-in page on development host → `/login`
-- **SignUp:** Sign-up page on development host → `/login`
-- **Signing Out:** Page on development host → `/login`
+1. **Super Admin / Admin** goes to **Staff** page in dashboard
+2. Clicks **"Invite Staff"**
+3. Fills in: email, role (Admin/Tutor), tracks (if Tutor)
+4. System generates a unique invite link
+5. **Link is displayed in the UI** (no email sending yet — copy and share manually)
+6. Recipient opens the link → sees **Set Password** page
+7. Recipient enters full name + password → account created → auto-logged in
+8. Recipient is now in the admin panel
 
-### User Roles (Public Metadata)
-To access the admin panel, users need a `role` in their Clerk `publicMetadata`:
+### Creating the First Super Admin
 
-```json
-{
-  "role": "SUPER_ADMIN"
-}
+The first user must be created **manually in Supabase**:
+
+```sql
+-- Run this in Supabase SQL Editor
+INSERT INTO users (id, email, full_name, role, password_hash)
+VALUES (
+  gen_random_uuid(),
+  'your-email@example.com',
+  'Your Name',
+  'SUPER_ADMIN',
+  '$2a$12$<bcrypt-hash-of-your-password>'
+);
 ```
 
-Valid roles: `SUPER_ADMIN`, `ADMIN`, `STAFF`
+To generate a bcrypt hash, use Node.js:
 
-Set this in Clerk Dashboard → Users → [user] → Public metadata.
+```bash
+node -e "const bcrypt = require('bcryptjs'); bcrypt.hash('your-password', 12).then(h => console.log(h))"
+```
+
+After creating the first Super Admin, you can log in at `/login` and start inviting others.
+
+### API Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/auth/login` | POST | Email + password → login |
+| `/api/auth/logout` | POST | Destroy session → clear cookies |
+| `/api/auth/refresh` | POST | Rotate refresh token → new access token |
+| `/api/auth/me` | GET | Return current user info |
+| `/api/admin/invitations` | GET | List pending invitations |
+| `/api/admin/invitations` | POST | Create new invitation |
+| `/api/admin/invite/accept` | POST | Accept invitation + set password |
+| `/api/admin/change-password` | POST | Change password (when logged in) |
 
 ---
 
-## 9. API Routes
+## 9. API Routes (Admin)
 
 All routes are behind `withAdminAuth()` which:
-1. Resolves the Clerk user
-2. Checks their role (must be ADMIN or SUPER_ADMIN)
-3. Creates a service-role Supabase client
-4. Logs the API call to `audit_log`
-5. Calls the route handler
+1. Reads the access token from cookies
+2. Verifies the JWT signature
+3. Fetches the user from the database
+4. Checks their role (must be ADMIN or SUPER_ADMIN)
+5. Creates a service-role Supabase client
+6. Logs the API call to `audit_log`
+7. Calls the route handler
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -216,6 +306,9 @@ All routes are behind `withAdminAuth()` which:
 | `/api/admin/staff` | GET | List admin/staff users |
 | `/api/admin/curriculum` | GET | List courses with units and lessons |
 | `/api/admin/settings` | GET/PATCH | Read/update admin settings |
+| `/api/admin/invitations` | GET/POST | List/create invitations |
+| `/api/admin/invite/accept` | POST | Accept invitation |
+| `/api/admin/change-password` | POST | Change password |
 
 ### Response Format
 All endpoints return:
@@ -243,22 +336,30 @@ Or just push to `master` — Vercel auto-deploys from GitHub.
 
 ### After Deployment
 1. Set environment variables in Vercel dashboard (see section 7)
-2. Update Clerk redirect URLs if the domain changed
-3. Assign admin roles in Clerk for new users
+2. **Remove all old Clerk environment variables** from Vercel
+3. Run the database migration (if not already done): `supabase/migrations/009_custom_admin_auth.sql`
+4. Create the first SUPER_ADMIN user in Supabase (see section 8)
+5. Generate JWT secrets: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
 
 ---
 
 ## 11. Known Issues & Gotchas
 
-1. **Clerk dev keys in production** — The current setup uses `pk_test_` / `sk_test_` keys. Clerk will show a warning. To go fully production, get live keys from Clerk.
+1. **First user must be created manually** — There is no sign-up. The first SUPER_ADMIN must be inserted directly into the `users` table with a bcrypt password hash (see section 8).
 
-2. **No `applications` page in the UI** — The route group doesn't have an applications page component yet. The API exists but there's no `src/app/(admin)/dashboard/applications/page.tsx`.
+2. **No email sending** — Invitation links are generated and displayed in the UI. You must copy and share them manually (e.g., WhatsApp, email). No email provider is integrated.
 
-3. **Curriculum page uses `useCurriculum` hook** — This queries the `courses` table which has no `track_id` or `level` columns. The hook returns courses with a hardcoded `"General"` track and `"beginner"` level.
+3. **No forgot password** — Intentionally omitted. Password can only be changed inside the dashboard when logged in.
 
-4. **Settings page** — The `admin_settings` table schema doesn't match the `Settings` TypeScript interface. The API returns the raw DB shape which works, but if you add a settings UI form, you'll need to align the types.
+4. **No `applications` page in the UI** — The route group doesn't have an applications page component yet. The API exists but there's no `src/app/(admin)/dashboard/applications/page.tsx`.
 
-5. **TypeScript strict mode** — `ignoreBuildErrors: true` is set in `next.config.ts` because the Supabase dynamic query types cause TS errors. This is fine for now but should be cleaned up long-term.
+5. **Curriculum page uses `useCurriculum` hook** — This queries the `courses` table which has no `track_id` or `level` columns. The hook returns courses with a hardcoded `"General"` track and `"beginner"` level.
+
+6. **Settings page** — The `admin_settings` table schema doesn't match the `Settings` TypeScript interface. The API returns the raw DB shape which works, but if you add a settings UI form, you'll need to align the types.
+
+7. **TypeScript strict mode** — `ignoreBuildErrors: true` is set in `next.config.ts` because the Supabase dynamic query types cause TS errors. This is fine for now but should be cleaned up long-term.
+
+8. **Token rotation** — Refresh tokens are single-use. Each refresh deletes the old session and creates a new one. If you open multiple tabs, they share the same session via cookies.
 
 ---
 
@@ -290,6 +391,12 @@ vercel logs https://cetech-academy-admin.vercel.app --expand
 
 # Kill stuck dev server
 taskkill //PID <pid> //F
+
+# Generate bcrypt password hash (for creating first user)
+node -e "const bcrypt = require('bcryptjs'); bcrypt.hash('your-password', 12).then(h => console.log(h))"
+
+# Generate JWT secret
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
 ---
@@ -298,8 +405,7 @@ taskkill //PID <pid> //F
 
 - **Repo owner:** godswill976545-stack (GitHub)
 - **Supabase project:** `kohlegvunumiwxbhfbwb` (https://supabase.com/dashboard/project/kohlegvunumiwxbhfbwb)
-- **Clerk app:** `sunny-panther-26` (https://dashboard.clerk.com)
 
 ---
 
-**TL;DR:** It works. Push to `master` to deploy. Set env vars in Vercel. Assign roles in Clerk. The admin panel uses a service-role key to read/write the main cetech-academy database directly.
+**TL;DR:** It works. Push to `master` to deploy. Set env vars in Vercel (ACCESS_TOKEN_SECRET, REFRESH_TOKEN_SECRET + Supabase). Create first SUPER_ADMIN in Supabase SQL. Then invite staff from the dashboard. No Clerk — fully custom auth with JWT + httpOnly cookies.

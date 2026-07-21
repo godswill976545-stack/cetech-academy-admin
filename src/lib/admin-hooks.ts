@@ -213,7 +213,54 @@ export function useCurriculum(filters?: { track?: string; level?: string }) {
 
 // Role-based access control hook
 export function useCanAccess(resource: string, action: string) {
-  // This will use the auth store to check permissions
-  // Implementation depends on how your auth state is stored
-  return false; // Placeholder - implement actual permission logic
+  return false; // Placeholder
+}
+
+// Invitations Hooks
+export interface Invitation {
+  id: string;
+  email: string;
+  role: string;
+  assigned_tracks: string[];
+  expires_at: string;
+  accepted_at: string | null;
+  created_at: string;
+  inviteLink?: string;
+}
+
+export function useInvitations() {
+  return useQuery({
+    queryKey: ['admin', 'invitations'],
+    queryFn: async () => {
+      const { data: res } = await api.get<{ data: Invitation[] }>('/admin/invitations');
+      return res.data;
+    },
+    staleTime: 1000 * 60 * 2,
+  });
+}
+
+export function useCreateInvitation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (invite: { email: string; role: string; assignedTracks?: string[] }) => {
+      const { data: res } = await api.post<{ data: Invitation }>('/admin/invitations', invite);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'invitations'] });
+    },
+  });
+}
+
+export function useRevokeInvitation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (invitationId: string) => {
+      const { data: res } = await api.delete<{ success: boolean }>(`/admin/invitations/${invitationId}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'invitations'] });
+    },
+  });
 }

@@ -10,7 +10,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     if (!isAuthenticated) {
       redirect('/login');
     }
-    // Authenticated non-admins: redirect client-side so Clerk's verification iframe isn't interrupted.
+    // Authenticated non-admins: redirect client-side.
     return <AdminGate reason="unauthorized" />;
   }
 

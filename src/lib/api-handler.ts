@@ -7,7 +7,7 @@ export function withAdminAuth(
 ) {
   return async (req: NextRequest) => {
     try {
-      const { user, isAuthenticated } = await requireAdmin();
+      const { user, isAuthenticated } = await requireAdmin(req);
 
       if (!user) {
         return NextResponse.json(
@@ -18,7 +18,7 @@ export function withAdminAuth(
 
       const supabase = createMainRepoAdminClient();
 
-      // Best-effort audit log (non-blocking)
+      // Best-effort audit log
       try {
         await supabase.from('audit_log').insert({
           actor_id: user.id,

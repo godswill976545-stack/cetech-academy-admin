@@ -2,7 +2,7 @@
 
 import { AppShell, Burger, NavLink, ScrollArea, Group, Text, Avatar } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   IconDashboard,
@@ -14,7 +14,6 @@ import {
   IconSettings,
   IconLogout,
 } from '@tabler/icons-react';
-import { useClerk } from '@clerk/nextjs';
 import type { AdminUser } from '@/types';
 
 interface AdminShellProps {
@@ -35,7 +34,12 @@ const nav = [
 export function AdminShell({ children, user }: AdminShellProps) {
   const [opened, { toggle }] = useDisclosure();
   const pathname = usePathname();
-  const { signOut } = useClerk();
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.push('/login');
+  };
 
   return (
     <AppShell
@@ -84,7 +88,7 @@ export function AdminShell({ children, user }: AdminShellProps) {
           <NavLink
             label="Sign Out"
             leftSection={<IconLogout size={18} />}
-            onClick={() => signOut({ redirectUrl: '/login' })}
+            onClick={handleSignOut}
             className="rounded-lg"
             color="red"
           />

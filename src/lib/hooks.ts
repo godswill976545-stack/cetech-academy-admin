@@ -19,3 +19,9 @@ export { useInviteStaff } from './admin-hooks';
 // Re-export utility hooks
 export { useCanAccess } from './admin-hooks';
 export { useCurriculum } from './admin-hooks';
+
+// Re-export invitation hooks
+export { useInvitations } from './admin-hooks';
+export { useCreateInvitation } from './admin-hooks';
+export { useRevokeInvitation } from './admin-hooks';
+export type { Invitation } from './admin-hooks';
