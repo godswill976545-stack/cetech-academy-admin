@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAdminAuth } from '@/lib/api-handler';
-import { createMainRepoAdminClient } from '@/lib/supabase/admin';
 
-export const DELETE = withAdminAuth(async (req: NextRequest, supabase: any, user: any, { params }: { params: Promise<{ id: string }> }) => {
-  const { id } = await params;
+export const DELETE = withAdminAuth(async (req: NextRequest, supabase: any, user: any) => {
+  // Extract ID from the URL path: /api/admin/invitations/[id]
+  const segments = req.nextUrl.pathname.split('/');
+  const id = segments[segments.length - 1];
+
+  if (!id) {
+    return NextResponse.json({ success: false, error: 'Invalid invitation ID' }, { status: 400 });
+  }
 
   // Only admins can revoke invitations
   if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
