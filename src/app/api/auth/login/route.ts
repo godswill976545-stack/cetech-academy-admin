@@ -49,14 +49,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create session with cookies
-    const userAgent = req.headers.get('user-agent') || undefined;
-    const res = await createSession(user.id, userAgent);
-
-    // Add user data to response body
-    const body = await res.json();
-    return NextResponse.json({
-      ...body,
+    // Create response with user data, then set session cookies on it
+    const res = NextResponse.json({
+      success: true,
       user: {
         id: user.id,
         email: user.email,
@@ -64,7 +59,12 @@ export async function POST(req: NextRequest) {
         role: user.role,
         assignedTracks: user.assigned_tracks || [],
       },
-    }, { status: 200 });
+    });
+
+    const userAgent = req.headers.get('user-agent') || undefined;
+    await createSession(res, user.id, userAgent);
+
+    return res;
   } catch (err) {
     console.error('Login error:', err);
     return NextResponse.json(

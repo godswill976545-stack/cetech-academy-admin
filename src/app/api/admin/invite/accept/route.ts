@@ -85,14 +85,9 @@ export async function POST(req: NextRequest) {
       .update({ accepted_at: new Date().toISOString() })
       .eq('id', invitation.id);
 
-    // Auto-login: create session
-    const userAgent = req.headers.get('user-agent') || undefined;
-    const sessionRes = await createSession(newUser.id, userAgent);
-
-    // Add user data to response
-    const body = await sessionRes.json();
-    return NextResponse.json({
-      ...body,
+    // Auto-login: create response with user data, then set session cookies
+    const res = NextResponse.json({
+      success: true,
       user: {
         id: newUser.id,
         email: newUser.email,
@@ -100,7 +95,12 @@ export async function POST(req: NextRequest) {
         role: newUser.role,
         assignedTracks: newUser.assigned_tracks || [],
       },
-    }, { status: 200 });
+    });
+
+    const userAgent = req.headers.get('user-agent') || undefined;
+    await createSession(res, newUser.id, userAgent);
+
+    return res;
   } catch (err) {
     console.error('Accept invitation error:', err);
     return NextResponse.json(

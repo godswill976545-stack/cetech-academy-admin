@@ -7,7 +7,7 @@ const supabase = createMainRepoAdminClient();
 const ACCESS_MAX_AGE = 60 * 15;        // 15 minutes
 const REFRESH_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
-function setCookies(res: NextResponse, accessToken: string, refreshToken: string): NextResponse {
+export function setCookies(res: NextResponse, accessToken: string, refreshToken: string): NextResponse {
   res.cookies.set('admin_access_token', accessToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -25,13 +25,17 @@ function setCookies(res: NextResponse, accessToken: string, refreshToken: string
   return res;
 }
 
-function clearCookies(res: NextResponse): NextResponse {
+export function clearCookies(res: NextResponse): NextResponse {
   res.cookies.set('admin_access_token', '', { httpOnly: true, path: '/', maxAge: 0 });
   res.cookies.set('admin_refresh_token', '', { httpOnly: true, path: '/api/auth/refresh', maxAge: 0 });
   return res;
 }
 
-export async function createSession(userId: string, userAgent?: string): Promise<NextResponse> {
+/**
+ * Creates a session in the DB and sets cookies on the given response.
+ * Does NOT return a new response — the caller owns the response.
+ */
+export async function createSession(res: NextResponse, userId: string, userAgent?: string): Promise<NextResponse> {
   const accessToken = await generateAccessToken(userId);
   const refreshToken = await generateRefreshToken(userId);
 
@@ -44,21 +48,26 @@ export async function createSession(userId: string, userAgent?: string): Promise
     expires_at: expiresAt,
   });
 
-  const res = NextResponse.json({ success: true });
   return setCookies(res, accessToken, refreshToken);
 }
 
-export async function destroySession(refreshToken: string): Promise<NextResponse> {
+/**
+ * Destroys a session and clears cookies on the given response.
+ */
+export async function destroySession(res: NextResponse, refreshToken: string): Promise<NextResponse> {
   await supabase.from('admin_sessions').delete().eq('refresh_token', refreshToken);
-  const res = NextResponse.json({ success: true });
   return clearCookies(res);
 }
 
-export async function refreshSession(oldRefreshToken: string): Promise<NextResponse> {
+/**
+ * Rotates the refresh token and sets new cookies on the given response.
+ */
+export async function refreshSession(res: NextResponse, oldRefreshToken: string): Promise<NextResponse> {
   const payload = await verifyRefreshToken(oldRefreshToken);
   if (!payload) {
-    const res = NextResponse.json({ success: false, error: 'Invalid refresh token' }, { status: 401 });
-    return clearCookies(res);
+    return clearCookies(
+      NextResponse.json({ success: false, error: 'Invalid refresh token' }, { status: 401 })
+    );
   }
 
   // Verify session exists in DB and not expired
@@ -70,8 +79,9 @@ export async function refreshSession(oldRefreshToken: string): Promise<NextRespo
     .single();
 
   if (!session) {
-    const res = NextResponse.json({ success: false, error: 'Session expired' }, { status: 401 });
-    return clearCookies(res);
+    return clearCookies(
+      NextResponse.json({ success: false, error: 'Session expired' }, { status: 401 })
+    );
   }
 
   // Delete old session
@@ -88,6 +98,5 @@ export async function refreshSession(oldRefreshToken: string): Promise<NextRespo
     expires_at: expiresAt,
   });
 
-  const res = NextResponse.json({ success: true });
   return setCookies(res, accessToken, refreshToken);
 }
