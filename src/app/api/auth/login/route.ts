@@ -16,11 +16,13 @@ export async function POST(req: NextRequest) {
 
     const supabase = createMainRepoAdminClient();
 
-    // Find user by email
+    // Find user by email (only admin/staff roles — ignore student accounts)
+    const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'STAFF', 'TUTOR'];
     const { data: user, error } = await supabase
       .from('users')
       .select('id, email, full_name, role, password_hash, assigned_tracks')
       .eq('email', email.toLowerCase().trim())
+      .in('role', adminRoles)
       .single();
 
     if (error || !user) {
