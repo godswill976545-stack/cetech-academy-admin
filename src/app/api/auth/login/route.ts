@@ -49,15 +49,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check role is admin/staff (not student)
-    const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'STAFF', 'TUTOR'];
-    if (!adminRoles.includes(user.role)) {
-      return NextResponse.json(
-        { success: false, error: 'You do not have admin access' },
-        { status: 403 }
-      );
-    }
-
     // Create session with cookies
     const userAgent = req.headers.get('user-agent') || undefined;
     const res = await createSession(user.id, userAgent);
