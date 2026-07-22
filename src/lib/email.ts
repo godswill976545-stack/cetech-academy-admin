@@ -26,13 +26,15 @@ export async function sendInviteEmail({
 }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.error('RESEND_API_KEY is not configured');
-    return { success: false, error: 'Email service not configured' };
+    console.error('[Email] RESEND_API_KEY is not configured');
+    return { success: false, error: 'Email service not configured. Set RESEND_API_KEY.' };
   }
 
   try {
+    console.log(`[Email] Sending invitation to ${to} from onboarding@resend.dev`);
+
     const { data, error } = await getResend().emails.send({
-      from: 'onboarding@resend.dev',
+      from: 'CeTech Admin <onboarding@resend.dev>',
       to: [to],
       subject: `You've been invited to join CeTech Academy Admin`,
       html: `
@@ -78,14 +80,14 @@ export async function sendInviteEmail({
     });
 
     if (error) {
-      console.error('Resend API error:', JSON.stringify(error));
+      console.error('[Email] Resend API error:', JSON.stringify(error));
       return { success: false, error: error.message || 'Email send failed' };
     }
 
-    console.log('Email sent successfully:', data?.id);
+    console.log('[Email] Sent successfully, ID:', data?.id);
     return { success: true, id: data?.id };
   } catch (err: any) {
-    console.error('Email send exception:', err?.message || err);
+    console.error('[Email] Exception:', err?.message || err);
     return { success: false, error: err?.message || 'Email send failed' };
   }
 }
