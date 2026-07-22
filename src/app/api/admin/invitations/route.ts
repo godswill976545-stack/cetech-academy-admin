@@ -125,7 +125,6 @@ export const POST = withAdminAuth(async (req: NextRequest, supabase: any, user: 
 
   if (!emailResult.success) {
     console.error('Failed to send invitation email:', emailResult.error);
-    // Still return success — the invitation was created, just email failed
   }
 
   return NextResponse.json({
@@ -134,6 +133,7 @@ export const POST = withAdminAuth(async (req: NextRequest, supabase: any, user: 
       ...invitation,
       inviteLink,
       emailSent: emailResult.success,
+      emailError: emailResult.success ? undefined : emailResult.error,
     },
   }, { status: 201 });
 });

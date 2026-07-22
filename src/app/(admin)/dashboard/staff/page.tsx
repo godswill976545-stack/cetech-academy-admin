@@ -19,11 +19,17 @@ export default function StaffPage() {
   const [inviteError, setInviteError] = useState('');
   const [inviteLink, setInviteLink] = useState('');
   const [inviteSuccess, setInviteSuccess] = useState(false);
+  const [inviteEmailSent, setInviteEmailSent] = useState<boolean | null>(null);
+  const [inviteEmailError, setInviteEmailError] = useState('');
+  const [inviteSentTo, setInviteSentTo] = useState('');
 
   const handleInvite = async () => {
     setInviteError('');
     setInviteLink('');
     setInviteSuccess(false);
+    setInviteEmailSent(null);
+    setInviteEmailError('');
+    setInviteSentTo('');
 
     if (!inviteEmail || !inviteRole) {
       setInviteError('Email and role are required.');
@@ -40,6 +46,9 @@ export default function StaffPage() {
 
       setInviteLink(result.inviteLink || '');
       setInviteSuccess(true);
+      setInviteEmailSent(result.emailSent ?? false);
+      setInviteEmailError(result.emailError || '');
+      setInviteSentTo(inviteEmail);
       setInviteEmail('');
       setInviteRole('TUTOR');
       setInviteTracks('');
@@ -193,10 +202,22 @@ export default function StaffPage() {
       >
         {inviteSuccess && inviteLink ? (
           <Stack gap="md">
-            <Alert color="green" variant="light">
-              Invitation sent! An email has been sent to <strong>{inviteEmail || 'the recipient'}</strong>.
-            </Alert>
-            <Text size="sm" c="dimmed">Share this link as a backup:</Text>
+            {inviteEmailSent === true ? (
+              <Alert color="green" variant="light">
+                ✅ Invitation created! Email sent to <strong>{inviteSentTo}</strong>.
+              </Alert>
+            ) : inviteEmailSent === false ? (
+              <Alert color="yellow" variant="light">
+                ⚠️ Invitation created, but email failed to send: {inviteEmailError || 'Unknown error'}.
+                <br /><br />
+                <strong>Share this link manually with the recipient:</strong>
+              </Alert>
+            ) : (
+              <Alert color="blue" variant="light">
+                Invitation created for <strong>{inviteSentTo}</strong>.
+              </Alert>
+            )}
+            <Text size="sm" c="dimmed">Invitation link (share with the recipient):</Text>
             <Group>
               <TextInput
                 value={inviteLink}
@@ -214,7 +235,7 @@ export default function StaffPage() {
                 )}
               </CopyButton>
             </Group>
-            <Button variant="light" onClick={() => { setModalOpen(false); setInviteLink(''); setInviteSuccess(false); }}>
+            <Button variant="light" onClick={() => { setModalOpen(false); setInviteLink(''); setInviteSuccess(false); setInviteEmailSent(null); setInviteEmailError(''); setInviteSentTo(''); }}>
               Done
             </Button>
           </Stack>

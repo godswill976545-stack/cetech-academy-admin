@@ -226,6 +226,8 @@ export interface Invitation {
   accepted_at: string | null;
   created_at: string;
   inviteLink?: string;
+  emailSent?: boolean;
+  emailError?: string;
 }
 
 export function useInvitations() {
