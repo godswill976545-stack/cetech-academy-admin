@@ -118,7 +118,7 @@ export const POST = withAdminAuth(async (req: NextRequest, supabase: any, user: 
   // Send invitation email
   const emailResult = await sendInviteEmail({
     to: email.toLowerCase().trim(),
-    inviterName: user.full_name || user.email,
+    inviterName: user.fullName || user.email,
     role,
     inviteLink,
   });

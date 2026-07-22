@@ -13,9 +13,9 @@ export async function POST(req: NextRequest) {
     }
 
     const res = NextResponse.json({ success: true });
-    await refreshSession(res, refreshToken);
+    const refreshedRes = await refreshSession(res, refreshToken);
 
-    return res;
+    return refreshedRes;
   } catch (err) {
     console.error('Refresh error:', err);
     return NextResponse.json(

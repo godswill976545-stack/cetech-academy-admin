@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAdminAuth } from '@/lib/api-handler';
-import { createMainRepoAdminClient } from '@/lib/supabase/admin';
 import { hashPassword, verifyPassword } from '@/lib/auth-utils';
 
 export const POST = withAdminAuth(async (req: NextRequest, supabase: any, user: any) => {
