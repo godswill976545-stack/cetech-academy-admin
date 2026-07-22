@@ -1,11 +1,13 @@
 'use client';
 
-import { Title, Text, Card, Badge, Table, Group, Button, Loader, Alert, Center } from '@mantine/core';
-import { IconEye, IconAlertCircle } from '@tabler/icons-react';
+import { Title, Text, Card, Badge, Table, Group, Loader, Alert, Center, TextInput } from '@mantine/core';
+import { IconAlertCircle } from '@tabler/icons-react';
 import { useStudents } from '@/lib/hooks';
+import { useState } from 'react';
 
 export default function StudentsPage() {
   const { data, isLoading, error } = useStudents();
+  const [search, setSearch] = useState('');
 
   if (isLoading) {
     return (
@@ -24,44 +26,71 @@ export default function StudentsPage() {
   }
 
   const rows = Array.isArray(data) ? data : [];
+  const filtered = search
+    ? rows.filter((r) =>
+        r.name?.toLowerCase().includes(search.toLowerCase()) ||
+        r.email?.toLowerCase().includes(search.toLowerCase()) ||
+        r.track?.toLowerCase().includes(search.toLowerCase())
+      )
+    : rows;
+
+  const statusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'green';
+      case 'suspended': return 'red';
+      case 'graduated': return 'blue';
+      case 'payment_due': return 'yellow';
+      default: return 'gray';
+    }
+  };
 
   return (
     <div>
       <Group justify="space-between" className="mb-6">
         <Title order={2} className="text-white">Students</Title>
-        <Button color="brand">Add Student</Button>
+        <TextInput
+          placeholder="Search by name, email, or track..."
+          value={search}
+          onChange={(e) => setSearch(e.currentTarget.value)}
+          w={300}
+          styles={{
+            input: { backgroundColor: '#0f172a', borderColor: '#334155', color: 'white' },
+          }}
+        />
       </Group>
 
       <Card withBorder className="bg-slate-900/50 border-slate-800">
         <Text c="dimmed" size="sm" className="mb-4">
-          View, filter, and manage all enrolled students. Track-scoped staff see only their assigned tracks.
+          {filtered.length} student{filtered.length !== 1 ? 's' : ''} found
         </Text>
-        {rows.length === 0 ? (
+        {filtered.length === 0 ? (
           <Text c="dimmed" className="text-center py-8">No students found</Text>
         ) : (
           <Table highlightOnHover>
             <thead>
               <tr>
-                <th>Student ID</th>
                 <th>Name</th>
+                <th>Email</th>
                 <th>Track</th>
                 <th>Cohort</th>
                 <th>Status</th>
-                <th></th>
+                <th>Payment</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {filtered.map((row) => (
                 <tr key={row.id}>
-                  <td>{row.id}</td>
                   <td>{row.name}</td>
-                  <td>{row.track}</td>
-                  <td>{row.cohort}</td>
+                  <td>{row.email}</td>
+                  <td>{row.track || '—'}</td>
+                  <td>{row.cohort || '—'}</td>
                   <td>
-                    <Badge color={row.status === 'active' ? 'green' : 'yellow'}>{row.status}</Badge>
+                    <Badge color={statusColor(row.status)}>{row.status}</Badge>
                   </td>
                   <td>
-                    <Button variant="subtle" size="xs" leftSection={<IconEye size={14} />}>View</Button>
+                    <Badge color={row.paymentStatus === 'paid' ? 'green' : 'yellow'} variant="light">
+                      {row.paymentStatus || '—'}
+                    </Badge>
                   </td>
                 </tr>
               ))}

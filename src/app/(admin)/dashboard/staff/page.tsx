@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Title, Text, Card, Table, Badge, Group, Button, Loader, Alert, Center, Modal, TextInput, Select, Stack, ActionIcon, CopyButton, Tooltip } from '@mantine/core';
+import { Title, Text, Card, Table, Badge, Group, Button, Loader, Alert, Center, Modal, TextInput, Select, Stack, ActionIcon, CopyButton, Tooltip, Textarea } from '@mantine/core';
 import { IconMail, IconAlertCircle, IconPlus, IconCopy, IconCheck, IconTrash } from '@tabler/icons-react';
 import { useStaff, useInvitations, useCreateInvitation, useRevokeInvitation } from '@/lib/hooks';
-import { useQueryClient } from '@tanstack/react-query';
+import { notifications } from '@mantine/notifications';
 
 export default function StaffPage() {
   const { data: staff = [], isLoading: staffLoading, error: staffError } = useStaff();
@@ -48,12 +48,20 @@ export default function StaffPage() {
     }
   };
 
-  const handleRevoke = async (id: string) => {
-    if (!confirm('Revoke this invitation?')) return;
+  const handleRevoke = async (id: string, email: string) => {
     try {
       await revokeInvite.mutateAsync(id);
+      notifications.show({
+        title: 'Invitation Revoked',
+        message: `Invitation to ${email} has been revoked.`,
+        color: 'green',
+      });
     } catch (err: any) {
-      alert(err?.response?.data?.error || 'Failed to revoke invitation');
+      notifications.show({
+        title: 'Error',
+        message: err?.response?.data?.error || 'Failed to revoke invitation',
+        color: 'red',
+      });
     }
   };
 
@@ -73,6 +81,25 @@ export default function StaffPage() {
     );
   }
 
+  const roleColor = (role: string) => {
+    switch (role) {
+      case 'super_admin': case 'SUPER_ADMIN': return 'red';
+      case 'admin': case 'ADMIN': return 'blue';
+      case 'tutor': case 'TUTOR': return 'green';
+      case 'staff': case 'STAFF': return 'gray';
+      default: return 'gray';
+    }
+  };
+
+  const statusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'green';
+      case 'invited': return 'blue';
+      case 'inactive': return 'gray';
+      default: return 'gray';
+    }
+  };
+
   return (
     <div>
       <Group justify="space-between" className="mb-6">
@@ -85,7 +112,7 @@ export default function StaffPage() {
       {/* Active Staff */}
       <Card withBorder className="bg-slate-900/50 border-slate-800 mb-6">
         <Text c="dimmed" size="sm" className="mb-4">
-          Active staff members and their assigned tracks.
+          {staff.length} active staff member{staff.length !== 1 ? 's' : ''}
         </Text>
         {staff.length === 0 ? (
           <Text c="dimmed" className="text-center py-8">No staff members found</Text>
@@ -106,15 +133,11 @@ export default function StaffPage() {
                   <td>{row.name}</td>
                   <td>{row.email}</td>
                   <td>
-                    <Badge color={row.role === 'super_admin' ? 'red' : row.role === 'admin' ? 'blue' : 'gray'}>
-                      {row.role}
-                    </Badge>
+                    <Badge color={roleColor(row.role)}>{row.role.replace('_', ' ')}</Badge>
                   </td>
                   <td>{row.assignedTracks?.join(', ') || '—'}</td>
                   <td>
-                    <Badge color={row.status === 'active' ? 'green' : 'blue'}>
-                      {row.status}
-                    </Badge>
+                    <Badge color={statusColor(row.status)}>{row.status}</Badge>
                   </td>
                 </tr>
               ))}
@@ -127,7 +150,7 @@ export default function StaffPage() {
       {invitations.length > 0 && (
         <Card withBorder className="bg-slate-900/50 border-slate-800">
           <Text c="dimmed" size="sm" className="mb-4">
-            Pending invitations (expire after 7 days).
+            {invitations.length} pending invitation{invitations.length !== 1 ? 's' : ''} (expire after 7 days)
           </Text>
           <Table highlightOnHover>
             <thead>
@@ -144,14 +167,12 @@ export default function StaffPage() {
                 <tr key={inv.id}>
                   <td>{inv.email}</td>
                   <td>
-                    <Badge color={inv.role === 'SUPER_ADMIN' ? 'red' : inv.role === 'ADMIN' ? 'blue' : 'gray'}>
-                      {inv.role}
-                    </Badge>
+                    <Badge color={roleColor(inv.role)}>{inv.role}</Badge>
                   </td>
                   <td>{inv.assigned_tracks?.join(', ') || '—'}</td>
                   <td>{new Date(inv.expires_at).toLocaleDateString()}</td>
                   <td>
-                    <ActionIcon color="red" variant="subtle" onClick={() => handleRevoke(inv.id)}>
+                    <ActionIcon color="red" variant="subtle" onClick={() => handleRevoke(inv.id, inv.email)}>
                       <IconTrash size={16} />
                     </ActionIcon>
                   </td>
@@ -173,8 +194,9 @@ export default function StaffPage() {
         {inviteSuccess && inviteLink ? (
           <Stack gap="md">
             <Alert color="green" variant="light">
-              Invitation sent! Share this link with {inviteEmail}:
+              Invitation sent! An email has been sent to <strong>{inviteEmail || 'the recipient'}</strong>.
             </Alert>
+            <Text size="sm" c="dimmed">Share this link as a backup:</Text>
             <Group>
               <TextInput
                 value={inviteLink}

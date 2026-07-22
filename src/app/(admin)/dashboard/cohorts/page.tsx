@@ -1,7 +1,7 @@
 'use client';
 
-import { Title, Text, Card, Table, Badge, Group, Button, Loader, Alert, Center } from '@mantine/core';
-import { IconUsers, IconAlertCircle } from '@tabler/icons-react';
+import { Title, Text, Card, Table, Badge, Group, Loader, Alert, Center, Progress } from '@mantine/core';
+import { IconAlertCircle } from '@tabler/icons-react';
 import { useCohorts } from '@/lib/hooks';
 
 export default function CohortsPage() {
@@ -23,16 +23,24 @@ export default function CohortsPage() {
     );
   }
 
+  const statusColor = (status: string) => {
+    switch (status) {
+      case 'open': return 'green';
+      case 'in_progress': return 'blue';
+      case 'planning': return 'yellow';
+      case 'completed': return 'gray';
+      case 'cancelled': return 'red';
+      default: return 'gray';
+    }
+  };
+
   return (
     <div>
-      <Group justify="space-between" className="mb-6">
-        <Title order={2} className="text-white">Cohorts & Assessments</Title>
-        <Button color="brand">Create Cohort</Button>
-      </Group>
+      <Title order={2} className="mb-6 text-white">Cohorts & Assessments</Title>
 
       <Card withBorder className="bg-slate-900/50 border-slate-800">
         <Text c="dimmed" size="sm" className="mb-4">
-          Create cohorts, set capacity, schedule assessment slots, and record assessment outcomes.
+          {rows.length} cohort{rows.length !== 1 ? 's' : ''} found
         </Text>
         {rows.length === 0 ? (
           <Text c="dimmed" className="text-center py-8">No cohorts found</Text>
@@ -41,30 +49,43 @@ export default function CohortsPage() {
             <thead>
               <tr>
                 <th>Cohort</th>
+                <th>Track</th>
                 <th>Capacity</th>
                 <th>Enrolled</th>
+                <th>Fill Rate</th>
                 <th>Start Date</th>
                 <th>Status</th>
-                <th></th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td>{row.name}</td>
-                  <td>{row.capacity}</td>
-                  <td>{row.enrolled}</td>
-                  <td>{new Date(row.startDate).toLocaleDateString()}</td>
-                  <td>
-                    <Badge color={row.status === 'open' ? 'green' : row.status === 'planning' ? 'blue' : 'gray'}>
-                      {row.status}
-                    </Badge>
-                  </td>
-                  <td>
-                    <Button variant="subtle" size="xs" leftSection={<IconUsers size={14} />}>Manage</Button>
-                  </td>
-                </tr>
-              ))}
+              {rows.map((row) => {
+                const fillRate = row.capacity > 0 ? Math.round((row.enrolled / row.capacity) * 100) : 0;
+                return (
+                  <tr key={row.id}>
+                    <td>{row.name}</td>
+                    <td>
+                      <Badge color="gray" variant="light">{row.track || '—'}</Badge>
+                    </td>
+                    <td>{row.capacity}</td>
+                    <td>{row.enrolled}</td>
+                    <td>
+                      <Group gap="xs">
+                        <Progress
+                          value={fillRate}
+                          size="sm"
+                          w={60}
+                          color={fillRate >= 80 ? 'red' : fillRate >= 50 ? 'yellow' : 'green'}
+                        />
+                        <Text size="xs" c="dimmed">{fillRate}%</Text>
+                      </Group>
+                    </td>
+                    <td>{row.startDate ? new Date(row.startDate).toLocaleDateString() : '—'}</td>
+                    <td>
+                      <Badge color={statusColor(row.status)}>{row.status}</Badge>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </Table>
         )}

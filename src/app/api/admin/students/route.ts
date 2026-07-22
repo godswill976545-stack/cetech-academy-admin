@@ -45,7 +45,8 @@ export const GET = withAdminAuth(async (_req: NextRequest) => {
     track: user.assigned_tracks?.[0] || '',
     cohort: '',
     status: user.payment_status === 'paid' ? 'active' : 'payment_due',
-    enrolledAt: user.created_at,
+    paymentStatus: user.payment_status || 'unpaid',
+    joinedDate: user.created_at,
   })) || [];
 
   return NextResponse.json({
@@ -80,10 +81,9 @@ export const POST = withAdminAuth(async (req: NextRequest) => {
   const { data: user, error } = await supabase
     .from('users')
     .insert({
-      clerk_id: `clerk_admin_${Date.now()}`,
       email,
       full_name: fullName,
-      role,
+      role: role || 'STUDENT',
       assigned_tracks: assignedTracks || [],
       payment_status: paymentStatus || 'unpaid',
       is_verified: isVerified || false,

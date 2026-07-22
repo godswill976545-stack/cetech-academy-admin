@@ -1,48 +1,49 @@
 'use client';
 
-import { Title, Text, Card, Switch, Group, Button, Select, Loader, Alert } from '@mantine/core';
-import { IconAlertCircle } from '@tabler/icons-react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import api from '@/lib/api';
-
-interface Settings {
-  portalAccess: 'first' | 'full';
-  auditLogRetention: boolean;
-  allowAdminRefunds: boolean;
-}
-
-function useSettings() {
-  return useQuery({
-    queryKey: ['settings'],
-    queryFn: async () => {
-      const { data } = await api.get<Settings>('/admin/settings');
-      return data;
-    },
-  });
-}
-
-function useUpdateSettings() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (settings: Partial<Settings>) => {
-      const { data } = await api.patch<Settings>('/admin/settings', settings);
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['settings'] });
-    },
-  });
-}
+import { useState, useEffect } from 'react';
+import { Title, Text, Card, Switch, Group, Button, Select, Loader, Alert, Stack, NumberInput } from '@mantine/core';
+import { IconAlertCircle, IconCheck } from '@tabler/icons-react';
+import { useSettings, useUpdateSettings } from '@/lib/hooks';
 
 export default function SettingsPage() {
   const { data: settings, isLoading, error } = useSettings();
   const updateSettings = useUpdateSettings();
 
+  const [portalAccess, setPortalAccess] = useState<string>('first');
+  const [auditLogRetention, setAuditLogRetention] = useState(true);
+  const [allowAdminRefunds, setAllowAdminRefunds] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
+
+  useEffect(() => {
+    if (settings) {
+      setPortalAccess(settings.portalAccess || 'first');
+      setAuditLogRetention(settings.auditLogRetention ?? true);
+      setAllowAdminRefunds(settings.allowAdminRefunds ?? false);
+    }
+  }, [settings]);
+
+  const handleChange = () => {
+    setHasChanges(true);
+  };
+
+  const handleSave = async () => {
+    try {
+      await updateSettings.mutateAsync({
+        portalAccess: portalAccess as 'first' | 'full',
+        auditLogRetention,
+        allowAdminRefunds,
+      });
+      setHasChanges(false);
+    } catch (err) {
+      console.error('Failed to save settings:', err);
+    }
+  };
+
   if (isLoading) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
+      <Center className="min-h-[60vh]">
         <Loader color="brand" size="xl" />
-      </div>
+      </Center>
     );
   }
 
@@ -63,42 +64,53 @@ export default function SettingsPage() {
         <Text c="dimmed" size="sm" className="mb-4">
           Configure when portal access unlocks and which currencies/gateways are active.
         </Text>
-        <Group className="mb-4">
+        <Stack gap="md">
           <Select
             label="Portal Access"
-            defaultValue={settings?.portalAccess || 'first'}
+            value={portalAccess}
+            onChange={(val) => { setPortalAccess(val || 'first'); handleChange(); }}
             data={[
               { value: 'first', label: 'Unlock on first instalment' },
               { value: 'full', label: 'Unlock on full payment' },
             ]}
+            styles={{
+              input: { backgroundColor: '#0f172a', borderColor: '#334155', color: 'white' },
+              label: { color: '#94a3b8' },
+            }}
           />
-        </Group>
+        </Stack>
       </Card>
 
-      <Card withBorder className="bg-slate-900/50 border-slate-800">
-        <Title order={4} className="mb-4 text-white">Super Admin Only</Title>
+      <Card withBorder className="bg-slate-900/50 border-slate-800 mb-6">
+        <Title order={4} className="mb-4 text-white">Security & Audit</Title>
         <Text c="dimmed" size="sm" className="mb-4">
-          Destructive operations and provider configuration require super-admin privileges.
+          Configure security policies and audit log retention.
         </Text>
-        <Group>
+        <Stack gap="md">
           <Switch
             label="Enable audit-log retention"
-            defaultChecked={settings?.auditLogRetention ?? true}
+            checked={auditLogRetention}
+            onChange={(e) => { setAuditLogRetention(e.currentTarget.checked); handleChange(); }}
           />
           <Switch
             label="Allow admin refunds"
-            defaultChecked={settings?.allowAdminRefunds ?? false}
+            checked={allowAdminRefunds}
+            onChange={(e) => { setAllowAdminRefunds(e.currentTarget.checked); handleChange(); }}
           />
-        </Group>
+        </Stack>
+      </Card>
+
+      <Group justify="flex-end">
         <Button
-          color="red"
-          className="mt-6"
+          color="brand"
           loading={updateSettings.isPending}
-          onClick={() => updateSettings.mutate({})}
+          disabled={!hasChanges}
+          onClick={handleSave}
+          leftSection={<IconCheck size={16} />}
         >
           Save Settings
         </Button>
-      </Card>
+      </Group>
     </div>
   );
 }

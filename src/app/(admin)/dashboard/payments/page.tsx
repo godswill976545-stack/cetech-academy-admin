@@ -1,11 +1,13 @@
 'use client';
 
-import { Title, Text, Card, Table, Badge, Group, Button, Loader, Alert, Center } from '@mantine/core';
-import { IconReceipt, IconAlertCircle } from '@tabler/icons-react';
+import { Title, Text, Card, Table, Badge, Group, Loader, Alert, Center, SimpleGrid, TextInput } from '@mantine/core';
+import { IconAlertCircle } from '@tabler/icons-react';
 import { usePayments } from '@/lib/hooks';
+import { useState } from 'react';
 
 export default function PaymentsPage() {
   const { data, isLoading, error } = usePayments();
+  const [search, setSearch] = useState('');
 
   if (isLoading) {
     return (
@@ -24,47 +26,91 @@ export default function PaymentsPage() {
   }
 
   const rows = Array.isArray(data) ? data : [];
+  const filtered = search
+    ? rows.filter((r) =>
+        r.studentName?.toLowerCase().includes(search.toLowerCase()) ||
+        r.studentEmail?.toLowerCase().includes(search.toLowerCase())
+      )
+    : rows;
+
+  // Calculate stats from the data
+  const totalPaid = rows.filter((r) => r.status === 'paid').reduce((sum, r) => sum + r.amount, 0);
+  const totalPending = rows.filter((r) => r.status === 'pending').reduce((sum, r) => sum + r.amount, 0);
+  const totalOverdue = rows.filter((r) => r.status === 'overdue').reduce((sum, r) => sum + r.amount, 0);
+
+  const statusColor = (status: string) => {
+    switch (status) {
+      case 'paid': return 'green';
+      case 'pending': return 'yellow';
+      case 'overdue': return 'red';
+      case 'refunded': return 'blue';
+      default: return 'gray';
+    }
+  };
 
   return (
     <div>
-      <Group justify="space-between" className="mb-6">
-        <Title order={2} className="text-white">Payments & Ledger</Title>
-        <Button color="brand">Record Offline Payment</Button>
+      <Title order={2} className="mb-6 text-white">Payments & Ledger</Title>
+
+      {/* Stats */}
+      <SimpleGrid cols={{ base: 1, sm: 3 }} className="mb-6">
+        <Card withBorder className="bg-slate-900/50 border-slate-800">
+          <Text size="sm" c="dimmed">Total Paid</Text>
+          <Text size="xl" fw={700} c="green">₦{totalPaid.toLocaleString()}</Text>
+        </Card>
+        <Card withBorder className="bg-slate-900/50 border-slate-800">
+          <Text size="sm" c="dimmed">Pending</Text>
+          <Text size="xl" fw={700} c="yellow">₦{totalPending.toLocaleString()}</Text>
+        </Card>
+        <Card withBorder className="bg-slate-900/50 border-slate-800">
+          <Text size="sm" c="dimmed">Overdue</Text>
+          <Text size="xl" fw={700} c="red">₦{totalOverdue.toLocaleString()}</Text>
+        </Card>
+      </SimpleGrid>
+
+      <Group justify="space-between" className="mb-4">
+        <Text c="dimmed" size="sm">
+          {filtered.length} payment{filtered.length !== 1 ? 's' : ''} found
+        </Text>
+        <TextInput
+          placeholder="Search by student name..."
+          value={search}
+          onChange={(e) => setSearch(e.currentTarget.value)}
+          w={300}
+          styles={{
+            input: { backgroundColor: '#0f172a', borderColor: '#334155', color: 'white' },
+          }}
+        />
       </Group>
 
       <Card withBorder className="bg-slate-900/50 border-slate-800">
-        <Text c="dimmed" size="sm" className="mb-4">
-          Reconcile gateway events, view the append-only ledger, and issue receipts. Webhooks are the source of truth.
-        </Text>
-        {rows.length === 0 ? (
+        {filtered.length === 0 ? (
           <Text c="dimmed" className="text-center py-8">No payments found</Text>
         ) : (
           <Table highlightOnHover>
             <thead>
               <tr>
-                <th>Invoice</th>
                 <th>Student</th>
                 <th>Amount</th>
-                <th>Date</th>
+                <th>Method</th>
                 <th>Status</th>
-                <th></th>
+                <th>Date</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {filtered.map((row) => (
                 <tr key={row.id}>
-                  <td>{row.id}</td>
                   <td>{row.studentName}</td>
                   <td>₦{row.amount.toLocaleString()}</td>
-                  <td>{new Date(row.createdAt).toLocaleDateString()}</td>
                   <td>
-                    <Badge color={row.status === 'paid' ? 'green' : row.status === 'pending' ? 'yellow' : 'red'}>
-                      {row.status}
+                    <Badge color="gray" variant="light">
+                      {row.method === 'bank_transfer' ? 'Bank Transfer' : row.method === 'offline' ? 'Offline' : row.method}
                     </Badge>
                   </td>
                   <td>
-                    <Button variant="subtle" size="xs" leftSection={<IconReceipt size={14} />}>Receipt</Button>
+                    <Badge color={statusColor(row.status)}>{row.status}</Badge>
                   </td>
+                  <td>{row.date ? new Date(row.date).toLocaleDateString() : '—'}</td>
                 </tr>
               ))}
             </tbody>

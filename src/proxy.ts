@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifyAccessToken } from '@/lib/auth-utils';
 
-const PUBLIC_PATHS = ['/login', '/unauthorized', '/invite/accept', '/api/auth/'];
+const PUBLIC_PATHS = ['/login', '/unauthorized', '/invite/accept', '/api/auth/', '/api/admin/invite/accept'];
 
 function isPublicRoute(pathname: string): boolean {
   return PUBLIC_PATHS.some((prefix) => pathname.startsWith(prefix));

@@ -1,7 +1,7 @@
 'use client';
 
-import { Title, Text, Card, Tree, Group, Button, Loader, Alert, Center } from '@mantine/core';
-import { IconPlus, IconAlertCircle } from '@tabler/icons-react';
+import { Title, Text, Card, Table, Badge, Group, Loader, Alert, Center, Accordion } from '@mantine/core';
+import { IconAlertCircle, IconBook, IconSchool } from '@tabler/icons-react';
 import { useCurriculum } from '@/lib/hooks';
 
 export default function ContentPage() {
@@ -25,37 +25,69 @@ export default function ContentPage() {
 
   // Group modules by track
   const tracks = modules.reduce((acc, mod) => {
-    if (!acc[mod.track]) acc[mod.track] = [];
-    acc[mod.track].push(mod);
+    const track = mod.track || 'General';
+    if (!acc[track]) acc[track] = [];
+    acc[track].push(mod);
     return acc;
   }, {} as Record<string, typeof modules>);
 
-  const treeData = Object.entries(tracks).map(([track, mods]) => ({
-    label: track,
-    value: track,
-    children: mods.map((mod) => ({
-      label: `${mod.title} (${mod.status})`,
-      value: mod.id,
-    })),
-  }));
+  const trackEntries = Object.entries(tracks);
 
   return (
     <div>
       <Group justify="space-between" className="mb-6">
         <Title order={2} className="text-white">Curriculum & Content</Title>
-        <Button color="brand" leftSection={<IconPlus size={16} />}>New Lesson</Button>
+        <Group>
+          <Badge color="gray" variant="light" size="lg">
+            <IconBook size={14} style={{ marginRight: 4 }} />
+            {modules.length} course{modules.length !== 1 ? 's' : ''}
+          </Badge>
+        </Group>
       </Group>
 
-      <Card withBorder className="bg-slate-900/50 border-slate-800">
-        <Text c="dimmed" size="sm" className="mb-4">
-          Manage curriculum templates, lessons, quizzes, and exams. Track-scoped staff can author for their assigned tracks; admins publish.
-        </Text>
-        {treeData.length === 0 ? (
+      {trackEntries.length === 0 ? (
+        <Card withBorder className="bg-slate-900/50 border-slate-800">
           <Text c="dimmed" className="text-center py-8">No curriculum modules found</Text>
-        ) : (
-          <Tree data={treeData} />
-        )}
-      </Card>
+        </Card>
+      ) : (
+        <Accordion multiple defaultValue={trackEntries.map(([track]) => track)}>
+          {trackEntries.map(([track, mods]) => (
+            <Accordion.Item key={track} value={track}>
+              <Accordion.Control>
+                <Group>
+                  <IconSchool size={18} className="text-brand-400" />
+                  <Text fw={600} c="white">{track}</Text>
+                  <Badge color="gray" variant="light">{mods.length} course{mods.length !== 1 ? 's' : ''}</Badge>
+                </Group>
+              </Accordion.Control>
+              <Accordion.Panel>
+                <Table highlightOnHover>
+                  <thead>
+                    <tr>
+                      <th>Course</th>
+                      <th>Level</th>
+                      <th>Lessons</th>
+                      <th>Units</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mods.map((mod) => (
+                      <tr key={mod.id}>
+                        <td>{mod.title}</td>
+                        <td>
+                          <Badge color="gray" variant="light">{mod.level || 'General'}</Badge>
+                        </td>
+                        <td>{Array.isArray(mod.lessons) ? mod.lessons.length : 0}</td>
+                        <td>{mod.unitCount || 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              </Accordion.Panel>
+            </Accordion.Item>
+          ))}
+        </Accordion>
+      )}
     </div>
   );
 }

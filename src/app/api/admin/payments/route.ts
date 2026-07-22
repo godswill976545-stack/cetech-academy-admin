@@ -48,12 +48,14 @@ export const GET = withAdminAuth(async (_req: NextRequest) => {
   // Transform to match Payment interface expected by UI
   const transformed = invoices?.map(inv => ({
     id: inv.id,
-    studentId: inv.student_id,
     studentName: (inv.users as any)?.full_name || (inv.users as any)?.email || '',
+    studentEmail: (inv.users as any)?.email || '',
     amount: parseFloat(inv.amount),
+    currency: inv.currency || 'NGN',
+    method: inv.paystack_reference ? 'card' : 'offline',
     status: inv.status?.toLowerCase() || 'pending',
-    method: 'card',
-    createdAt: inv.created_at,
+    date: inv.paid_at || inv.created_at,
+    cohortName: (inv.cohorts as any)?.name || '',
   })) || [];
 
   // Calculate stats

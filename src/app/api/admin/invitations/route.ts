@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withAdminAuth } from '@/lib/api-handler';
 import { createMainRepoAdminClient } from '@/lib/supabase/admin';
 import { generateInviteToken } from '@/lib/auth-utils';
+import { sendInviteEmail } from '@/lib/email';
 
 export const GET = withAdminAuth(async (_req: NextRequest, supabase: any, user: any) => {
   const { data: invitations, error } = await supabase
@@ -114,11 +115,25 @@ export const POST = withAdminAuth(async (req: NextRequest, supabase: any, user: 
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://cetech-academy-admin.vercel.app';
   const inviteLink = `${baseUrl}/invite/accept?token=${token}`;
 
+  // Send invitation email
+  const emailResult = await sendInviteEmail({
+    to: email.toLowerCase().trim(),
+    inviterName: user.full_name || user.email,
+    role,
+    inviteLink,
+  });
+
+  if (!emailResult.success) {
+    console.error('Failed to send invitation email:', emailResult.error);
+    // Still return success — the invitation was created, just email failed
+  }
+
   return NextResponse.json({
     success: true,
     data: {
       ...invitation,
       inviteLink,
+      emailSent: emailResult.success,
     },
   }, { status: 201 });
 });
