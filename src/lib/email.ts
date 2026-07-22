@@ -34,7 +34,7 @@ export async function sendInviteEmail({
     console.log(`[Email] Sending invitation to ${to} from onboarding@resend.dev`);
 
     const { data, error } = await getResend().emails.send({
-      from: 'CeTech Admin <onboarding@resend.dev>',
+      from: 'CeTech Admin <admin@cetechacademy.com>',
       to: [to],
       subject: `You've been invited to join CeTech Academy Admin`,
       html: `
