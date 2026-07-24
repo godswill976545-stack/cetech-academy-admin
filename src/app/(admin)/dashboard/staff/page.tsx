@@ -261,6 +261,7 @@ export default function StaffPage() {
               data={[
                 { value: 'TUTOR', label: 'Tutor' },
                 { value: 'ADMIN', label: 'Admin' },
+                { value: 'SUPER_ADMIN', label: 'Super Admin' },
               ]}
               styles={{ input: { backgroundColor: '#0f172a', borderColor: '#334155', color: 'white' }, label: { color: '#94a3b8' } }}
             />
