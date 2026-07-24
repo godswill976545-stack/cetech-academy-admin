@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createMainRepoAdminClient } from '@/lib/supabase/admin';
 import { hashPassword } from '@/lib/auth-utils';
 import { createSession } from '@/lib/session';
+import crypto from 'crypto';
 
 export async function POST(req: NextRequest) {
   try {
@@ -60,6 +61,7 @@ export async function POST(req: NextRequest) {
     const { data: newUser, error: createError } = await supabase
       .from('users')
       .insert({
+        id: crypto.randomUUID(),
         email: invitation.email,
         full_name: fullName || invitation.email.split('@')[0],
         role: invitation.role,
