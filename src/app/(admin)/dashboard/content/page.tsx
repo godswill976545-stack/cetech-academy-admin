@@ -77,8 +77,8 @@ export default function ContentPage() {
                         <td>
                           <Badge color="gray" variant="light">{mod.level || 'General'}</Badge>
                         </td>
-                        <td>{Array.isArray(mod.lessons) ? mod.lessons.length : 0}</td>
-                        <td>{mod.unitCount || 0}</td>
+                         <td>{Array.isArray(mod.lessons) ? mod.lessons.length : 0}</td>
+                         <td>{Array.isArray(mod.units) ? mod.units.length : 0}</td>
                       </tr>
                     ))}
                   </tbody>

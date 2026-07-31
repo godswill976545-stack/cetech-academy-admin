@@ -46,11 +46,11 @@ export default function DashboardPage() {
           value={`₦${(metrics?.revenueMTD ?? 0).toLocaleString()}`}
           icon={<IconCash size={24} />}
         />
-        <MetricCard
-          label="Active Cohorts"
-          value={metrics?.activeCohorts ?? 0}
-          icon={<IconSchool size={24} />}
-        />
+         <MetricCard
+           label="Active Cohorts"
+           value={metrics?.activeCohorts ?? 0}
+           icon={<IconSchool size={24} />}
+         />
       </SimpleGrid>
 
       <SimpleGrid cols={{ base: 1, lg: 2 }}>

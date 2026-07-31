@@ -95,6 +95,7 @@ export default function PaymentsPage() {
                 <th>Method</th>
                 <th>Status</th>
                 <th>Date</th>
+                <th>Cohort</th>
               </tr>
             </thead>
             <tbody>
@@ -111,6 +112,7 @@ export default function PaymentsPage() {
                     <Badge color={statusColor(row.status)}>{row.status}</Badge>
                   </td>
                   <td>{row.date ? new Date(row.date).toLocaleDateString() : '—'}</td>
+                  <td>{row.cohortName || '—'}</td>
                 </tr>
               ))}
             </tbody>

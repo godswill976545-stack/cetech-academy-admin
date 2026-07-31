@@ -45,6 +45,7 @@ export interface Student {
   email: string;
   track: string;
   cohort: string;
+  studentCode?: string;
   status: 'active' | 'suspended' | 'graduated' | 'payment_due';
   paymentStatus: string;
   joinedDate: string;
@@ -93,6 +94,7 @@ export interface CurriculumModule {
   track: string;
   level: string;
   lessons: CurriculumLesson[];
+  units?: { id: string; title: string; order_index: number; lessons: any[] }[];
   unitCount: number;
 }
 

@@ -30,7 +30,8 @@ export default function StudentsPage() {
     ? rows.filter((r) =>
         r.name?.toLowerCase().includes(search.toLowerCase()) ||
         r.email?.toLowerCase().includes(search.toLowerCase()) ||
-        r.track?.toLowerCase().includes(search.toLowerCase())
+                r.track?.toLowerCase().includes(search.toLowerCase()) ||
+                r.studentCode?.toLowerCase().includes(search.toLowerCase())
       )
     : rows;
 
@@ -72,9 +73,10 @@ export default function StudentsPage() {
                 <th>Name</th>
                 <th>Email</th>
                 <th>Track</th>
-                <th>Cohort</th>
-                <th>Status</th>
-                <th>Payment</th>
+                 <th>Student Code</th>
+                 <th>Cohort</th>
+                 <th>Status</th>
+                 <th>Payment</th>
               </tr>
             </thead>
             <tbody>
@@ -83,6 +85,7 @@ export default function StudentsPage() {
                   <td>{row.name}</td>
                   <td>{row.email}</td>
                   <td>{row.track || '—'}</td>
+                  <td>{row.studentCode || '—'}</td>
                   <td>{row.cohort || '—'}</td>
                   <td>
                     <Badge color={statusColor(row.status)}>{row.status}</Badge>
