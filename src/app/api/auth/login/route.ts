@@ -14,13 +14,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const pool = getPool();
+const pool = getPool();
 
     const result = await pool.query(
       `SELECT id, email, full_name, role, password_hash, assigned_tracks
        FROM users
-       WHERE email = $1 AND role = ANY($2::text[])`,
-      [email.toLowerCase().trim(), ['ADMIN', 'SUPER_ADMIN', 'STAFF', 'TUTOR']]
+       WHERE email = $1 AND role IN ('ADMIN', 'SUPER_ADMIN', 'STAFF', 'TUTOR')`,
+      [email.toLowerCase().trim()]
     );
 
     const user = result.rows[0];
