@@ -1,81 +1,63 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAdminAuth } from '@/lib/api-handler';
-import { createMainRepoAdminClient } from '@/lib/supabase/admin';
+import { Pool } from 'pg';
 
-export const GET = withAdminAuth(async (_req: NextRequest) => {
-  const supabase = createMainRepoAdminClient();
+export const GET = withAdminAuth(async (_req: NextRequest, pool: Pool) => {
+  const { rows } = await pool.query(`SELECT * FROM admin_settings`);
 
-  const { data: settings, error } = await supabase
-    .from('admin_settings')
-    .select('*')
-    .single();
-
-  if (error && error.code !== 'PGRST116') {
-    console.error('Error fetching settings:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch settings' },
-      { status: 500 }
-    );
+  if (rows.length === 0) {
+    return NextResponse.json({
+      success: true,
+      data: {
+        portal_access: 'first',
+        audit_log_retention: true,
+        allow_admin_refunds: false,
+        payment_providers: {
+          ngn: ['paystack', 'flutterwave'],
+          ghs: ['paystack', 'flutterwave', 'hubtel'],
+          xof: ['kkiappay', 'fedapay', 'flutterwave'],
+        },
+        email_providers: ['resend', 'postmark', 'ses'],
+        course_access_policy: 'enrollment_based',
+      },
+    });
   }
 
-  // Return defaults if no settings row exists
-  const defaultSettings = {
-    portal_access: 'first',
-    audit_log_retention: true,
-    allow_admin_refunds: false,
-    payment_providers: {
-      ngn: ['paystack', 'flutterwave'],
-      ghs: ['paystack', 'flutterwave', 'hubtel'],
-      xof: ['kkiappay', 'fedapay', 'flutterwave'],
-    },
-    email_providers: ['resend', 'postmark', 'ses'],
-    course_access_policy: 'enrollment_based',
-  };
-
-  return NextResponse.json({
-    success: true,
-    data: settings || defaultSettings,
-  });
+  return NextResponse.json({ success: true, data: rows[0] });
 });
 
-export const PATCH = withAdminAuth(async (req: NextRequest) => {
+export const PATCH = withAdminAuth(async (req: NextRequest, pool: Pool) => {
   const updates = await req.json();
-  const supabase = createMainRepoAdminClient();
 
-  const { data: existingSettings } = await supabase
-    .from('admin_settings')
-    .select('id')
-    .single();
+  const existingRes = await pool.query(`SELECT id FROM admin_settings`);
 
   let result;
-  if (existingSettings) {
-    result = await supabase
-      .from('admin_settings')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', existingSettings.id)
-      .select()
-      .single();
-  } else {
-    result = await supabase
-      .from('admin_settings')
-      .insert({
-        ...updates,
-        created_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-  }
+  if (existingRes.rows.length > 0) {
+    const existingId = existingRes.rows[0].id;
 
-  if (result.error) {
-    console.error('Error updating settings:', result.error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to update settings' },
-      { status: 500 }
+    const columns = Object.keys(updates);
+    const values = Object.values(updates);
+    const setClauses = columns.map((col, idx) => `"${col}" = $${idx + 1}`);
+    setClauses.push(`updated_at = NOW()`);
+
+    result = await pool.query(
+      `UPDATE admin_settings SET ${setClauses.join(', ')} WHERE id = $${columns.length + 1} RETURNING *`,
+      [...values, existingId]
+    );
+  } else {
+    const columns = Object.keys(updates);
+    const values = Object.values(updates);
+    const placeholders = columns.map((_, idx) => `$${idx + 1}`);
+    columns.push('created_at');
+    values.push(new Date().toISOString());
+
+    result = await pool.query(
+      `INSERT INTO admin_settings (${columns.map(c => `"${c}"`).join(', ')})
+       VALUES (${[...placeholders, `$${columns.length}`].join(', ')})
+       RETURNING *`,
+      values
     );
   }
 
-  return NextResponse.json({ success: true, data: result.data });
+  return NextResponse.json({ success: true, data: result.rows[0] });
 });

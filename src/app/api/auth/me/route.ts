@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAccessToken } from '@/lib/auth-utils';
-import { createMainRepoAdminClient } from '@/lib/supabase/admin';
+import { getPool } from '@/lib/neon/server';
 
 export async function GET(req: NextRequest) {
   const token = req.cookies.get('admin_access_token')?.value;
@@ -13,14 +13,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Invalid or expired token' }, { status: 401 });
   }
 
-  const supabase = createMainRepoAdminClient();
-  const { data: user, error } = await supabase
-    .from('users')
-    .select('id, email, full_name, role, assigned_tracks')
-    .eq('id', payload.userId)
-    .single();
+  const pool = getPool();
+  const result = await pool.query(
+    `SELECT id, email, full_name, role, assigned_tracks
+     FROM users WHERE id = $1`,
+    [payload.userId]
+  );
 
-  if (error || !user) {
+  const user = result.rows[0];
+  if (!user) {
     return NextResponse.json({ success: false, error: 'User not found' }, { status: 401 });
   }
 

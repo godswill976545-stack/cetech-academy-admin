@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAdminAuth } from '@/lib/api-handler';
 import { hashPassword, verifyPassword } from '@/lib/auth-utils';
+import { Pool } from 'pg';
 
-export const POST = withAdminAuth(async (req: NextRequest, supabase: any, user: any) => {
+export const POST = withAdminAuth(async (req: NextRequest, pool: Pool, user: any) => {
   const { currentPassword, newPassword } = await req.json();
 
   if (!currentPassword || !newPassword) {
@@ -19,22 +20,21 @@ export const POST = withAdminAuth(async (req: NextRequest, supabase: any, user: 
     );
   }
 
-  // Fetch current password hash
-  const { data: dbUser, error } = await supabase
-    .from('users')
-    .select('password_hash')
-    .eq('id', user.id)
-    .single();
+  const userRes = await pool.query(
+    `SELECT password_hash FROM users WHERE id = $1`,
+    [user.id]
+  );
 
-  if (error || !dbUser) {
+  if (userRes.rows.length === 0) {
     return NextResponse.json(
       { success: false, error: 'User not found' },
       { status: 404 }
     );
   }
 
-  // Verify current password
-  const valid = await verifyPassword(currentPassword, dbUser.password_hash);
+  const passwordHash = userRes.rows[0].password_hash;
+
+  const valid = await verifyPassword(currentPassword, passwordHash);
   if (!valid) {
     return NextResponse.json(
       { success: false, error: 'Current password is incorrect' },
@@ -42,25 +42,16 @@ export const POST = withAdminAuth(async (req: NextRequest, supabase: any, user: 
     );
   }
 
-  // Hash new password and update
   const newHash = await hashPassword(newPassword);
-  const { error: updateError } = await supabase
-    .from('users')
-    .update({ password_hash: newHash })
-    .eq('id', user.id);
+  await pool.query(
+    `UPDATE users SET password_hash = $1 WHERE id = $2`,
+    [newHash, user.id]
+  );
 
-  if (updateError) {
-    return NextResponse.json(
-      { success: false, error: 'Failed to update password' },
-      { status: 500 }
-    );
-  }
-
-  // Invalidate all other sessions for this user (force re-login on other devices)
-  await supabase
-    .from('admin_sessions')
-    .delete()
-    .eq('user_id', user.id);
+  await pool.query(
+    `DELETE FROM admin_sessions WHERE user_id = $1`,
+    [user.id]
+  );
 
   return NextResponse.json({ success: true, message: 'Password updated successfully' });
 });

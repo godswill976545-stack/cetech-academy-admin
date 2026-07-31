@@ -259,7 +259,7 @@ export function useRevokeInvitation() {
   return useMutation({
     mutationFn: async (invitationId: string) => {
       const { data: res } = await api.delete<{ success: boolean }>(`/admin/invitations/${invitationId}`);
-      return res.data;
+      return res;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'invitations'] });

@@ -1,44 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAdminAuth } from '@/lib/api-handler';
-import { createMainRepoAdminClient } from '@/lib/supabase/admin';
+import { Pool } from 'pg';
 
-export const GET = withAdminAuth(async (_req: NextRequest) => {
-  const supabase = createMainRepoAdminClient();
+export const GET = withAdminAuth(async (_req: NextRequest, pool: Pool) => {
   const { searchParams } = new URL(_req.url);
   const limit = parseInt(searchParams.get('limit') || '50');
 
-  // Fetch recent activity from audit log (no join — actor_id is Clerk ID, not FK)
-  const { data: auditLogs, error } = await supabase
-    .from('audit_log')
-    .select('id, actor_id, action, target, target_id, created_at')
-    .order('created_at', { ascending: false })
-    .limit(limit);
+  const auditRes = await pool.query(
+    `SELECT id, actor_id, action, target, target_id, created_at
+     FROM audit_log
+     ORDER BY created_at DESC
+     LIMIT $1`,
+    [limit]
+  );
 
-  if (error) {
-    console.error('Error fetching activity log:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch activity log' },
-      { status: 500 }
-    );
-  }
+  const auditLogs = auditRes.rows;
 
-  // Fetch actor user info separately (actor_id stores Clerk IDs)
-  const actorIds = [...new Set(auditLogs?.map(log => log.actor_id).filter(Boolean) || [])];
-  let userMap: Record<string, { full_name: string; email: string }> = {};
+  const actorIds = [...new Set(auditLogs.map(log => log.actor_id).filter(Boolean))];
+  const userMap: Record<string, { full_name: string; email: string }> = {};
 
   if (actorIds.length > 0) {
-    const { data: actors } = await supabase
-      .from('users')
-      .select('clerk_id, full_name, email')
-      .in('clerk_id', actorIds);
-
-    userMap = actors?.reduce((acc, u) => {
-      acc[u.clerk_id] = u;
-      return acc;
-    }, {}) || {};
+    const userRes = await pool.query(
+      `SELECT clerk_id, full_name, email FROM users WHERE clerk_id = ANY($1::text[])`,
+      [actorIds]
+    );
+    for (const u of userRes.rows) {
+      userMap[u.clerk_id] = u;
+    }
   }
 
-  const recentActivity = auditLogs?.map(log => {
+  const recentActivity = auditLogs.map(log => {
     const actor = userMap[log.actor_id];
     return {
       id: log.id,
@@ -47,7 +38,7 @@ export const GET = withAdminAuth(async (_req: NextRequest) => {
       userId: log.actor_id,
       createdAt: log.created_at,
     };
-  }) || [];
+  });
 
   return NextResponse.json({
     success: true,

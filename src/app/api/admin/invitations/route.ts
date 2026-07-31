@@ -1,27 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAdminAuth } from '@/lib/api-handler';
-import { createMainRepoAdminClient } from '@/lib/supabase/admin';
+import { Pool } from 'pg';
 import { generateInviteToken } from '@/lib/auth-utils';
 import { sendInviteEmail } from '@/lib/email';
 
-export const GET = withAdminAuth(async (_req: NextRequest, supabase: any, user: any) => {
-  const { data: invitations, error } = await supabase
-    .from('admin_invitations')
-    .select('id, email, role, assigned_tracks, expires_at, accepted_at, created_at')
-    .is('accepted_at', null)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    return NextResponse.json({ success: false, error: 'Failed to fetch invitations' }, { status: 500 });
-  }
+export const GET = withAdminAuth(async (_req: NextRequest, pool: Pool) => {
+  const { rows: invitations } = await pool.query(
+    `SELECT id, email, role, assigned_tracks, expires_at, accepted_at, created_at
+     FROM admin_invitations
+     WHERE accepted_at IS NULL
+     ORDER BY created_at DESC`
+  );
 
   return NextResponse.json({ success: true, data: invitations || [] });
 });
 
-export const POST = withAdminAuth(async (req: NextRequest, supabase: any, user: any) => {
+export const POST = withAdminAuth(async (req: NextRequest, pool: Pool, user: any) => {
   const { email, role, assignedTracks } = await req.json();
 
-  // Role-based invite permissions
   if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
     return NextResponse.json(
       { success: false, error: 'Only admins can send invitations' },
@@ -29,7 +25,6 @@ export const POST = withAdminAuth(async (req: NextRequest, supabase: any, user: 
     );
   }
 
-  // Only SUPER_ADMIN can invite other SUPER_ADMINs
   if (role === 'SUPER_ADMIN' && user.role !== 'SUPER_ADMIN') {
     return NextResponse.json(
       { success: false, error: 'Only Super Admins can invite other Super Admins' },
@@ -37,7 +32,6 @@ export const POST = withAdminAuth(async (req: NextRequest, supabase: any, user: 
     );
   }
 
-  // ADMIN can only invite TUTOR
   if (user.role === 'ADMIN' && role !== 'TUTOR') {
     return NextResponse.json(
       { success: false, error: 'Admins can only invite Tutors' },
@@ -45,7 +39,6 @@ export const POST = withAdminAuth(async (req: NextRequest, supabase: any, user: 
     );
   }
 
-  // TUTOR cannot invite anyone
   if (user.role === 'TUTOR' || user.role === 'STAFF') {
     return NextResponse.json(
       { success: false, error: 'Tutors cannot send invitations' },
@@ -60,30 +53,25 @@ export const POST = withAdminAuth(async (req: NextRequest, supabase: any, user: 
     );
   }
 
-  // Check if user already exists
-  const { data: existingUser } = await supabase
-    .from('users')
-    .select('id')
-    .eq('email', email.toLowerCase().trim())
-    .single();
+  const emailLower = email.toLowerCase().trim();
 
-  if (existingUser) {
+  const existingUserRes = await pool.query(
+    `SELECT id FROM users WHERE email = $1`,
+    [emailLower]
+  );
+  if (existingUserRes.rows.length > 0) {
     return NextResponse.json(
       { success: false, error: 'A user with this email already exists' },
       { status: 409 }
     );
   }
 
-  // Check for pending invitation
-  const { data: existingInvite } = await supabase
-    .from('admin_invitations')
-    .select('id')
-    .eq('email', email.toLowerCase().trim())
-    .is('accepted_at', null)
-    .gt('expires_at', new Date().toISOString())
-    .single();
-
-  if (existingInvite) {
+  const existingInviteRes = await pool.query(
+    `SELECT id FROM admin_invitations
+     WHERE email = $1 AND accepted_at IS NULL AND expires_at > NOW()`,
+    [emailLower]
+  );
+  if (existingInviteRes.rows.length > 0) {
     return NextResponse.json(
       { success: false, error: 'A pending invitation already exists for this email' },
       { status: 409 }
@@ -91,33 +79,22 @@ export const POST = withAdminAuth(async (req: NextRequest, supabase: any, user: 
   }
 
   const token = generateInviteToken();
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const { data: invitation, error } = await supabase
-    .from('admin_invitations')
-    .insert({
-      email: email.toLowerCase().trim(),
-      role,
-      invited_by: user.id,
-      token,
-      assigned_tracks: assignedTracks || [],
-      expires_at: expiresAt,
-    })
-    .select('id, email, role, token, expires_at, created_at')
-    .single();
+  const insertRes = await pool.query(
+    `INSERT INTO admin_invitations (email, role, invited_by, token, assigned_tracks, expires_at, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, NOW())
+     RETURNING id, email, role, token, expires_at, created_at`,
+    [emailLower, role, user.id, token, assignedTracks || []]
+  );
 
-  if (error) {
-    console.error('Error creating invitation:', error);
-    return NextResponse.json({ success: false, error: 'Failed to create invitation' }, { status: 500 });
-  }
+  const invitation = insertRes.rows[0];
 
-  // Generate the invite link
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://cetech-academy-admin.vercel.app';
   const inviteLink = `${baseUrl}/invite/accept?token=${token}`;
 
-  // Send invitation email
   const emailResult = await sendInviteEmail({
-    to: email.toLowerCase().trim(),
+    to: emailLower,
     inviterName: user.fullName || user.email,
     role,
     inviteLink,

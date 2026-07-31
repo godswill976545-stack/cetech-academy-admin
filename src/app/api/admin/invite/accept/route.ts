@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createMainRepoAdminClient } from '@/lib/supabase/admin';
+import { getPool } from '@/lib/neon/server';
 import { hashPassword } from '@/lib/auth-utils';
 import { createSession } from '@/lib/session';
 import crypto from 'crypto';
@@ -22,72 +22,53 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const supabase = createMainRepoAdminClient();
+    const pool = getPool();
 
-    // Find valid invitation
-    const { data: invitation, error } = await supabase
-      .from('admin_invitations')
-      .select('*')
-      .eq('token', token)
-      .is('accepted_at', null)
-      .gt('expires_at', new Date().toISOString())
-      .single();
+    const inviteRes = await pool.query(
+      `SELECT id, email, role, assigned_tracks
+       FROM admin_invitations
+       WHERE token = $1 AND accepted_at IS NULL AND expires_at > NOW()`,
+      [token]
+    );
 
-    if (error || !invitation) {
+    if (inviteRes.rows.length === 0) {
       return NextResponse.json(
         { success: false, error: 'Invalid or expired invitation link' },
         { status: 400 }
       );
     }
 
-    // Check if user already exists
-    const { data: existingUser } = await supabase
-      .from('users')
-      .select('id')
-      .eq('email', invitation.email)
-      .single();
+    const invitation = inviteRes.rows[0];
 
-    if (existingUser) {
+    const existingUserRes = await pool.query(
+      `SELECT id FROM users WHERE email = $1`,
+      [invitation.email]
+    );
+
+    if (existingUserRes.rows.length > 0) {
       return NextResponse.json(
         { success: false, error: 'An account with this email already exists' },
         { status: 409 }
       );
     }
 
-    // Hash password
     const passwordHash = await hashPassword(password);
+    const newUserId = crypto.randomUUID();
 
-    // Create user
-    const { data: newUser, error: createError } = await supabase
-      .from('users')
-      .insert({
-        id: crypto.randomUUID(),
-        email: invitation.email,
-        full_name: fullName || invitation.email.split('@')[0],
-        role: invitation.role,
-        assigned_tracks: invitation.assigned_tracks || [],
-        password_hash: passwordHash,
-        is_verified: true,
-        payment_status: 'paid',
-      })
-      .select('id, email, full_name, role, assigned_tracks')
-      .single();
+    const insertRes = await pool.query(
+      `INSERT INTO users (id, email, full_name, role, assigned_tracks, password_hash, is_verified, payment_status, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, true, 'paid', NOW())
+       RETURNING id, email, full_name, role, assigned_tracks`,
+      [newUserId, invitation.email, fullName || invitation.email.split('@')[0], invitation.role, invitation.assigned_tracks || []]
+    );
 
-    if (createError) {
-      console.error('Error creating user:', createError);
-      return NextResponse.json(
-        { success: false, error: 'Failed to create account' },
-        { status: 500 }
-      );
-    }
+    const newUser = insertRes.rows[0];
 
-    // Mark invitation as accepted
-    await supabase
-      .from('admin_invitations')
-      .update({ accepted_at: new Date().toISOString() })
-      .eq('id', invitation.id);
+    await pool.query(
+      `UPDATE admin_invitations SET accepted_at = NOW() WHERE id = $1`,
+      [invitation.id]
+    );
 
-    // Auto-login: create response with user data, then set session cookies
     const res = NextResponse.json({
       success: true,
       user: {

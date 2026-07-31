@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { verifyAccessToken } from '@/lib/auth-utils';
-import { createMainRepoAdminClient } from '@/lib/supabase/admin';
+import { getPool } from '@/lib/neon/server';
 import type { AdminUser } from '@/types';
 
 const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN'];
@@ -11,14 +11,15 @@ async function getUserFromToken(token: string): Promise<{ user: AdminUser | null
   const payload = await verifyAccessToken(token);
   if (!payload) return { user: null, isAuthenticated: false };
 
-  const supabase = createMainRepoAdminClient();
-  const { data: dbUser, error } = await supabase
-    .from('users')
-    .select('id, email, full_name, role, assigned_tracks')
-    .eq('id', payload.userId)
-    .single();
+  const pool = getPool();
+  const result = await pool.query(
+    `SELECT id, email, full_name, role, assigned_tracks
+     FROM users WHERE id = $1`,
+    [payload.userId]
+  );
 
-  if (error || !dbUser) return { user: null, isAuthenticated: true };
+  const dbUser = result.rows[0];
+  if (!dbUser) return { user: null, isAuthenticated: true };
 
   return {
     user: {
@@ -32,14 +33,12 @@ async function getUserFromToken(token: string): Promise<{ user: AdminUser | null
   };
 }
 
-// For API routes — reads token from NextRequest cookies
 export async function resolveUser(req?: NextRequest): Promise<{ user: AdminUser | null; isAuthenticated: boolean }> {
   const token = req?.cookies?.get('admin_access_token')?.value;
   if (!token) return { user: null, isAuthenticated: false };
   return getUserFromToken(token);
 }
 
-// For server components — reads token from next/headers cookies()
 export async function resolveUserFromCookies(): Promise<{ user: AdminUser | null; isAuthenticated: boolean }> {
   const cookieStore = await cookies();
   const token = cookieStore.get('admin_access_token')?.value;

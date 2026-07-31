@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createMainRepoAdminClient } from '@/lib/supabase/admin';
+import { getPool } from '@/lib/neon/server';
 import { verifyPassword } from '@/lib/auth-utils';
 import { createSession } from '@/lib/session';
 
@@ -14,25 +14,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const supabase = createMainRepoAdminClient();
+    const pool = getPool();
 
-    // Find user by email (only admin/staff roles — ignore student accounts)
-    const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'STAFF', 'TUTOR'];
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('id, email, full_name, role, password_hash, assigned_tracks')
-      .eq('email', email.toLowerCase().trim())
-      .in('role', adminRoles)
-      .single();
+    const result = await pool.query(
+      `SELECT id, email, full_name, role, password_hash, assigned_tracks
+       FROM users
+       WHERE email = $1 AND role = ANY($2::text[])`,
+      [email.toLowerCase().trim(), ['ADMIN', 'SUPER_ADMIN', 'STAFF', 'TUTOR']]
+    );
 
-    if (error || !user) {
+    const user = result.rows[0];
+
+    if (!user) {
       return NextResponse.json(
         { success: false, error: 'Invalid email or password' },
         { status: 401 }
       );
     }
 
-    // Check user has a password (was invited)
     if (!user.password_hash) {
       return NextResponse.json(
         { success: false, error: 'Your account has not been set up yet. Please accept your invitation first.' },
@@ -40,7 +39,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Verify password
     const valid = await verifyPassword(password, user.password_hash);
     if (!valid) {
       return NextResponse.json(
@@ -49,7 +47,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create response with user data, then set session cookies on it
     const res = NextResponse.json({
       success: true,
       user: {

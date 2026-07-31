@@ -1,92 +1,85 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAdminAuth } from '@/lib/api-handler';
-import { createMainRepoAdminClient } from '@/lib/supabase/admin';
+import { Pool } from 'pg';
 
-export const GET = withAdminAuth(async (_req: NextRequest) => {
-  const supabase = createMainRepoAdminClient();
+export const GET = withAdminAuth(async (_req: NextRequest, pool: Pool) => {
   const { searchParams } = new URL(_req.url);
   const track = searchParams.get('track');
   const status = searchParams.get('status');
 
-  let query = supabase
-    .from('cohorts')
-    .select(`
-      id,
-      name,
-      track_id,
-      capacity,
-      enrolled,
-      start_date,
-      end_date,
-      status,
-      assessment_date,
-      assessment_time,
-      created_at,
-      tracks(id, name, slug)
-    `, { count: 'exact' })
-    .order('created_at', { ascending: false });
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  let paramIdx = 1;
 
   if (track) {
-    query = query.eq('track_id', track);
+    conditions.push(`track_id = $${paramIdx++}`);
+    params.push(track);
   }
-
   if (status) {
-    query = query.eq('status', status);
+    conditions.push(`status = $${paramIdx++}`);
+    params.push(status);
   }
 
-  const { data: cohorts, error, count } = await query;
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const countSql = `SELECT COUNT(*) as count FROM cohorts ${whereClause}`;
 
-  if (error) {
-    console.error('Error fetching cohorts:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch cohorts' },
-      { status: 500 }
-    );
-  }
+  let orderClause = `ORDER BY created_at DESC`;
 
-  // Count applications per cohort individually (correct way to get counts)
-  const cohortIds = cohorts?.map(c => c.id) || [];
+  const sql = `SELECT c.id, c.name, c.track_id, c.capacity, c.enrolled, c.start_date, c.end_date, c.status, c.assessment_date, c.assessment_time, c.created_at,
+               t.name as track_name, t.slug as track_slug
+               FROM cohorts c
+               LEFT JOIN tracks t ON c.track_id = t.id
+               ${whereClause}
+               ${orderClause}`;
+
+  const cohortRes = await pool.query(sql, params);
+  const countRes = await pool.query(countSql, params);
+
+  const cohorts = cohortRes.rows;
+  const count = parseInt(countRes.rows[0].count);
+
+  const cohortIds = cohorts.map(c => c.id);
   const applicationCounts: Record<string, number> = {};
 
-  for (const cid of cohortIds) {
-    const { count: appCount } = await supabase
-      .from('applications')
-      .select('id', { count: 'exact', head: true })
-      .eq('cohort_id', cid)
-      .eq('status', 'ASSESSED');
-    applicationCounts[cid] = appCount || 0;
+  if (cohortIds.length > 0) {
+    const appRes = await pool.query(
+      `SELECT cohort_id, COUNT(*) as count FROM applications
+       WHERE cohort_id = ANY($1::text[]) AND status = 'ASSESSED'
+       GROUP BY cohort_id`,
+      [cohortIds]
+    );
+    for (const row of appRes.rows) {
+      applicationCounts[row.cohort_id] = parseInt(row.count);
+    }
   }
 
-  // Transform to match Cohort interface
-  const transformedCohorts = cohorts?.map(cohort => ({
+  const transformedCohorts = cohorts.map(cohort => ({
     id: cohort.id,
     name: cohort.name,
-    track: (cohort.tracks as any)?.name || 'Unknown',
+    track: cohort.track_name || 'Unknown',
     trackId: cohort.track_id,
     capacity: cohort.capacity,
     enrolled: cohort.enrolled,
     startDate: cohort.start_date,
     endDate: cohort.end_date,
-    status: cohort.status?.toLowerCase() || 'planning',
+    status: (cohort.status || 'planning').toLowerCase(),
     assessmentDate: cohort.assessment_date,
     assessmentTime: cohort.assessment_time,
     createdAt: cohort.created_at,
     applicationCount: applicationCounts[cohort.id] || 0,
-  })) || [];
+  }));
 
   return NextResponse.json({
     success: true,
     data: transformedCohorts,
-    total: count || 0,
+    total: count,
     page: 1,
     pageSize: 50,
   });
 });
 
-export const POST = withAdminAuth(async (req: NextRequest) => {
+export const POST = withAdminAuth(async (req: NextRequest, pool: Pool) => {
   const { name, trackId, capacity, startDate, endDate, assessmentDate, assessmentTime } = await req.json();
-
-  const supabase = createMainRepoAdminClient();
 
   if (!name || !trackId) {
     return NextResponse.json(
@@ -95,42 +88,26 @@ export const POST = withAdminAuth(async (req: NextRequest) => {
     );
   }
 
-  const { data: track, error: trackError } = await supabase
-    .from('tracks')
-    .select('id, name, slug')
-    .eq('id', trackId)
-    .single();
+  const trackRes = await pool.query(
+    `SELECT id, name, slug FROM tracks WHERE id = $1`,
+    [trackId]
+  );
 
-  if (!track || trackError) {
+  if (trackRes.rows.length === 0) {
     return NextResponse.json(
       { success: false, error: 'Track not found in main database' },
       { status: 404 }
     );
   }
 
-  const { data: cohort, error } = await supabase
-    .from('cohorts')
-    .insert({
-      name,
-      track_id: trackId,
-      capacity: capacity || 30,
-      enrolled: 0,
-      start_date: startDate,
-      end_date: endDate,
-      status: 'PLANNING',
-      assessment_date: assessmentDate,
-      assessment_time: assessmentTime,
-    })
-    .select()
-    .single();
+  const insertRes = await pool.query(
+    `INSERT INTO cohorts (name, track_id, capacity, enrolled, start_date, end_date, status, assessment_date, assessment_time, created_at)
+     VALUES ($1, $2, $3, 0, $4, $5, 'PLANNING', $6, $7, NOW())
+     RETURNING *`,
+    [name, trackId, capacity || 30, startDate, endDate, assessmentDate, assessmentTime]
+  );
 
-  if (error) {
-    console.error('Error creating cohort:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to create cohort' },
-      { status: 500 }
-    );
-  }
+  const cohort = insertRes.rows[0];
 
   return NextResponse.json(
     { success: true, data: cohort },

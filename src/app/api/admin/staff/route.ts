@@ -1,58 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAdminAuth } from '@/lib/api-handler';
-import { createMainRepoAdminClient } from '@/lib/supabase/admin';
+import { Pool } from 'pg';
 
-export const GET = withAdminAuth(async (_req: NextRequest) => {
-  const supabase = createMainRepoAdminClient();
+export const GET = withAdminAuth(async (_req: NextRequest, pool: Pool) => {
   const { searchParams } = new URL(_req.url);
   const track = searchParams.get('track');
 
-  let query = supabase
-    .from('users')
-    .select(`
-      id,
-      email,
-      full_name,
-      role,
-      assigned_tracks,
-      student_code,
-      is_verified,
-      payment_status,
-      created_at
-    `, { count: 'exact' })
-    .in('role', ['ADMIN', 'STAFF', 'SUPER_ADMIN'])
-    .order('created_at', { ascending: false });
+  const conditions: string[] = [`role = ANY(ARRAY['ADMIN', 'STAFF', 'SUPER_ADMIN'])`];
+  const params: unknown[] = [];
+  let paramIdx = 1;
 
   if (track) {
-    query = query.contains('assigned_tracks', [track]);
+    conditions.push(`assigned_tracks @> $${paramIdx}::text[]`);
+    params.push(`{${track}}`);
   }
 
-  const { data: users, error, count } = await query;
+  const sql = `SELECT id, email, full_name, role, assigned_tracks, student_code, is_verified, payment_status, created_at
+               FROM users
+               WHERE ${conditions.join(' AND ')}
+               ORDER BY created_at DESC`;
 
-  if (error) {
-    console.error('Error fetching staff:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch staff' },
-      { status: 500 }
-    );
-  }
+  const countRes = await pool.query(
+    `SELECT COUNT(*) as count FROM users WHERE ${conditions.join(' AND ')}`,
+    params
+  );
+  const count = parseInt(countRes.rows[0].count);
 
-  // Transform — lowercase roles to match StaffMember type
-  const transformedStaff = users?.map(user => ({
+  const { rows: users } = await pool.query(sql, params);
+
+  const transformedStaff = users.map(user => ({
     id: user.id,
     name: user.full_name || user.email.split('@')[0],
     email: user.email,
-    role: user.role?.toLowerCase() || 'staff',
+    role: (user.role || 'staff').toLowerCase(),
     assignedTracks: user.assigned_tracks || [],
     studentCode: user.student_code,
     status: user.is_verified ? 'active' : 'invited',
-    createdAt: user.created_at,
-  })) || [];
+    joinedDate: user.created_at,
+  }));
 
   return NextResponse.json({
     success: true,
     data: transformedStaff,
-    total: count || 0,
+    total: count,
     page: 1,
     pageSize: 50,
   });

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAdminAuth } from '@/lib/api-handler';
+import { Pool } from 'pg';
 
-export const DELETE = withAdminAuth(async (req: NextRequest, supabase: any, user: any) => {
-  // Extract ID from the URL path: /api/admin/invitations/[id]
+export const DELETE = withAdminAuth(async (req: NextRequest, pool: Pool, user: any) => {
   const segments = req.nextUrl.pathname.split('/');
   const id = segments[segments.length - 1];
 
@@ -10,7 +10,6 @@ export const DELETE = withAdminAuth(async (req: NextRequest, supabase: any, user
     return NextResponse.json({ success: false, error: 'Invalid invitation ID' }, { status: 400 });
   }
 
-  // Only admins can revoke invitations
   if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
     return NextResponse.json(
       { success: false, error: 'Only admins can revoke invitations' },
@@ -18,15 +17,10 @@ export const DELETE = withAdminAuth(async (req: NextRequest, supabase: any, user
     );
   }
 
-  const { error } = await supabase
-    .from('admin_invitations')
-    .delete()
-    .eq('id', id);
-
-  if (error) {
-    console.error('Error revoking invitation:', error);
-    return NextResponse.json({ success: false, error: 'Failed to revoke invitation' }, { status: 500 });
-  }
+  await pool.query(
+    `DELETE FROM admin_invitations WHERE id = $1`,
+    [id]
+  );
 
   return NextResponse.json({ success: true });
 });

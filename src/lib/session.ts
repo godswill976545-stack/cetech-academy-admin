@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
-import { createMainRepoAdminClient } from '@/lib/supabase/admin';
+import { Pool } from 'pg';
+import { getPool } from '@/lib/neon/server';
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '@/lib/auth-utils';
 
-const supabase = createMainRepoAdminClient();
+const pool: Pool = getPool();
 
-const ACCESS_MAX_AGE = 60 * 15;        // 15 minutes
-const REFRESH_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
+const ACCESS_MAX_AGE = 60 * 15;
+const REFRESH_MAX_AGE = 60 * 60 * 24 * 7;
 
 export function setCookies(res: NextResponse, accessToken: string, refreshToken: string): NextResponse {
   res.cookies.set('admin_access_token', accessToken, {
@@ -31,37 +32,29 @@ export function clearCookies(res: NextResponse): NextResponse {
   return res;
 }
 
-/**
- * Creates a session in the DB and sets cookies on the given response.
- * Does NOT return a new response — the caller owns the response.
- */
 export async function createSession(res: NextResponse, userId: string, userAgent?: string): Promise<NextResponse> {
   const accessToken = await generateAccessToken(userId);
   const refreshToken = await generateRefreshToken(userId);
 
   const expiresAt = new Date(Date.now() + REFRESH_MAX_AGE * 1000).toISOString();
 
-  await supabase.from('admin_sessions').insert({
-    user_id: userId,
-    refresh_token: refreshToken,
-    user_agent: userAgent || null,
-    expires_at: expiresAt,
-  });
+  await pool.query(
+    `INSERT INTO admin_sessions (user_id, refresh_token, user_agent, expires_at)
+     VALUES ($1, $2, $3, $4)`,
+    [userId, refreshToken, userAgent || null, expiresAt]
+  );
 
   return setCookies(res, accessToken, refreshToken);
 }
 
-/**
- * Destroys a session and clears cookies on the given response.
- */
 export async function destroySession(res: NextResponse, refreshToken: string): Promise<NextResponse> {
-  await supabase.from('admin_sessions').delete().eq('refresh_token', refreshToken);
+  await pool.query(
+    `DELETE FROM admin_sessions WHERE refresh_token = $1`,
+    [refreshToken]
+  );
   return clearCookies(res);
 }
 
-/**
- * Rotates the refresh token and sets new cookies on the given response.
- */
 export async function refreshSession(res: NextResponse, oldRefreshToken: string): Promise<NextResponse> {
   const payload = await verifyRefreshToken(oldRefreshToken);
   if (!payload) {
@@ -70,33 +63,32 @@ export async function refreshSession(res: NextResponse, oldRefreshToken: string)
     );
   }
 
-  // Verify session exists in DB and not expired
-  const { data: session } = await supabase
-    .from('admin_sessions')
-    .select('id')
-    .eq('refresh_token', oldRefreshToken)
-    .gt('expires_at', new Date().toISOString())
-    .single();
+  const sessionResult = await pool.query(
+    `SELECT id FROM admin_sessions
+     WHERE refresh_token = $1 AND expires_at > $2`,
+    [oldRefreshToken, new Date().toISOString()]
+  );
 
-  if (!session) {
+  if (sessionResult.rows.length === 0) {
     return clearCookies(
       NextResponse.json({ success: false, error: 'Session expired' }, { status: 401 })
     );
   }
 
-  // Delete old session
-  await supabase.from('admin_sessions').delete().eq('refresh_token', oldRefreshToken);
+  await pool.query(
+    `DELETE FROM admin_sessions WHERE refresh_token = $1`,
+    [oldRefreshToken]
+  );
 
-  // Create new session (rotate tokens)
   const accessToken = await generateAccessToken(payload.userId);
   const refreshToken = await generateRefreshToken(payload.userId);
   const expiresAt = new Date(Date.now() + REFRESH_MAX_AGE * 1000).toISOString();
 
-  await supabase.from('admin_sessions').insert({
-    user_id: payload.userId,
-    refresh_token: refreshToken,
-    expires_at: expiresAt,
-  });
+  await pool.query(
+    `INSERT INTO admin_sessions (user_id, refresh_token, user_agent, expires_at)
+     VALUES ($1, $2, $3, $4)`,
+    [payload.userId, refreshToken, null, expiresAt]
+  );
 
   return setCookies(res, accessToken, refreshToken);
 }

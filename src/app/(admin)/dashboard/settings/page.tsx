@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Title, Text, Card, Switch, Group, Button, Select, Loader, Alert, Stack, NumberInput } from '@mantine/core';
+import { Title, Text, Card, Switch, Group, Button, Select, Loader, Alert, Stack, NumberInput, Center } from '@mantine/core';
 import { IconAlertCircle, IconCheck } from '@tabler/icons-react';
 import { useSettings, useUpdateSettings } from '@/lib/hooks';
 

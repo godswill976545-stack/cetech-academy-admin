@@ -1,78 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAdminAuth } from '@/lib/api-handler';
-import { createMainRepoAdminClient } from '@/lib/supabase/admin';
+import { Pool } from 'pg';
 
-export const GET = withAdminAuth(async (_req: NextRequest) => {
-  const supabase = createMainRepoAdminClient();
+export const GET = withAdminAuth(async (_req: NextRequest, pool: Pool) => {
+  const userCountRes = await pool.query(`SELECT COUNT(*) as count FROM users`);
+  const totalStudents = parseInt(userCountRes.rows[0].count);
 
-  // 1. Total users
-  const { count: userCount } = await supabase
-    .from('users')
-    .select('id', { count: 'exact', head: true });
+  const applicationCountRes = await pool.query(`SELECT COUNT(*) as count FROM applications`);
+  const applicationsCount = parseInt(applicationCountRes.rows[0].count);
 
-  // 2. Total applications
-  const { count: applicationCount } = await supabase
-    .from('applications')
-    .select('id', { count: 'exact', head: true });
+  const ledgerRes = await pool.query(`SELECT amount, currency, type FROM ledger_entries`);
+  const ledgerEntries = ledgerRes.rows;
 
-  // 3. Revenue from ledger entries
-  const { data: ledgerEntries } = await supabase
-    .from('ledger_entries')
-    .select('amount, currency, type');
+  const cohortsRes = await pool.query(
+    `SELECT id, enrolled, capacity FROM cohorts WHERE status = 'OPEN'`
+  );
+  const cohorts = cohortsRes.rows;
+  const totalCohorts = cohorts.length;
 
-  // 4. Active cohorts
-  const { data: cohorts, count: cohortCount } = await supabase
-    .from('cohorts')
-    .select('id, enrolled, capacity', { count: 'exact' })
-    .eq('status', 'OPEN');
+  const quizRes = await pool.query(`SELECT passed FROM quiz_results`);
+  const quizResults = quizRes.rows;
 
-  // 5. Quiz results for completion rate
-  const { data: quizResults } = await supabase
-    .from('quiz_results')
-    .select('passed');
+  const recentActivityRes = await pool.query(
+    `SELECT id, actor_id, action, target, target_id, created_at
+     FROM audit_log
+     ORDER BY created_at DESC
+     LIMIT 10`
+  );
+  const recentActivity = recentActivityRes.rows;
 
-  // 6. Recent activity (no join — fetch users separately)
-  const { data: recentActivity } = await supabase
-    .from('audit_log')
-    .select('id, actor_id, action, target, target_id, created_at')
-    .order('created_at', { ascending: false })
-    .limit(10);
-
-  // Fetch actor info for activity
-  const actorIds = [...new Set(recentActivity?.map(log => log.actor_id).filter(Boolean) || [])];
-  let actorMap: Record<string, { full_name: string; email: string }> = {};
+  const actorIds = [...new Set(recentActivity.map(log => log.actor_id).filter(Boolean))];
+  const actorMap: Record<string, { full_name: string; email: string }> = {};
   if (actorIds.length > 0) {
-    const { data: actors } = await supabase
-      .from('users')
-      .select('clerk_id, full_name, email')
-      .in('clerk_id', actorIds);
-    actorMap = actors?.reduce((acc, u) => { acc[u.clerk_id] = u; return acc; }, {}) || {};
+    const actorRes = await pool.query(
+      `SELECT clerk_id, full_name, email FROM users WHERE clerk_id = ANY($1::text[])`,
+      [actorIds]
+    );
+    for (const u of actorRes.rows) {
+      actorMap[u.clerk_id] = u;
+    }
   }
 
-  // Calculate metrics
-  const totalStudents = userCount || 0;
-  const applicationsCount = applicationCount || 0;
-
-  const revenueMTD = ledgerEntries?.
-    filter((entry: any) => entry.type === 'TUITION')
+  const revenueMTD = ledgerEntries
+    .filter((entry: any) => entry.type === 'TUITION')
     .reduce((sum: number, entry: any) => sum + parseFloat(entry.amount), 0) || 0;
 
-  const totalCohorts = cohortCount || 0;
-
-  const totalQuizzes = quizResults?.length || 0;
-  const passedQuizzes = quizResults?.filter((qr: any) => qr.passed).length || 0;
+  const totalQuizzes = quizResults.length;
+  const passedQuizzes = quizResults.filter((qr: any) => qr.passed).length;
   const completionRate = totalQuizzes > 0 ? (passedQuizzes / totalQuizzes) * 100 : 0;
 
-  const onTrack = cohorts?.
-    filter((c: any) => c.enrolled >= 20 && c.enrolled <= c.capacity * 0.8).length || 0;
+  const onTrack = cohorts.filter((c: any) => c.enrolled >= 20 && c.enrolled <= c.capacity * 0.8).length;
+  const atRisk = cohorts.filter((c: any) => c.enrolled < 15 || c.enrolled > c.capacity * 0.9).length;
+  const inactive = cohorts.length - onTrack - atRisk;
 
-  const atRisk = cohorts?.
-    filter((c: any) => c.enrolled < 15 || c.enrolled > c.capacity * 0.9).length || 0;
-
-  const inactive = (cohorts?.length || 0) - onTrack - atRisk;
-
-  // Format activity log
-  const formattedActivity = recentActivity?.map(item => {
+  const formattedActivity = recentActivity.map(item => {
     const actor = actorMap[item.actor_id];
     return {
       id: item.id,
@@ -80,7 +61,7 @@ export const GET = withAdminAuth(async (_req: NextRequest) => {
       userId: item.actor_id,
       createdAt: item.created_at,
     };
-  }) || [];
+  });
 
   return NextResponse.json({
     success: true,
