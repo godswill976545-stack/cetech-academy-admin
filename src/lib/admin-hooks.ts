@@ -13,6 +13,18 @@ import type {
   CurriculumModule,
 } from '@/types';
 
+// Current admin session
+export function useCurrentAdmin() {
+  return useQuery({
+    queryKey: ['auth', 'me'],
+    queryFn: async () => {
+      const { data: res } = await api.get<{ user: AdminUser }>('/auth/me');
+      return res.user;
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+}
+
 // Dashboard Hooks
 export function useDashboardMetrics() {
   return useQuery({

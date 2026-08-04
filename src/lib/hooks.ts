@@ -1,7 +1,7 @@
 // Re-export all hooks from main admin panel hooks
 // This file acts as the main API for data fetching in admin components
 
-export { useDashboardMetrics } from './admin-hooks';
+export { useCurrentAdmin, useDashboardMetrics } from './admin-hooks';
 export { useActivityLog } from './admin-hooks';
 export { useStudents } from './admin-hooks';
 export { usePayments } from './admin-hooks';

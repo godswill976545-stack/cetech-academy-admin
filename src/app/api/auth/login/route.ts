@@ -7,20 +7,28 @@ export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();
 
-    if (!email || !password) {
+    if (
+      typeof email !== 'string' ||
+      typeof password !== 'string' ||
+      !email.trim() ||
+      !password
+    ) {
       return NextResponse.json(
         { success: false, error: 'Email and password are required' },
         { status: 400 }
       );
     }
 
-const pool = getPool();
+    const pool = getPool();
 
+    const normalizedEmail = email.toLowerCase().trim();
     const result = await pool.query(
-      `SELECT id, email, full_name, role, password_hash, assigned_tracks
+      `SELECT id, LOWER(BTRIM(email)) AS email, full_name,
+              UPPER(BTRIM(role::text)) AS role, password_hash, assigned_tracks
        FROM users
-       WHERE email = $1 AND role IN ('ADMIN', 'SUPER_ADMIN', 'STAFF', 'TUTOR')`,
-      [email.toLowerCase().trim()]
+       WHERE LOWER(BTRIM(email)) = $1
+         AND UPPER(BTRIM(role::text)) IN ('ADMIN', 'SUPER_ADMIN', 'STAFF', 'TUTOR')`,
+      [normalizedEmail]
     );
 
     const user = result.rows[0];

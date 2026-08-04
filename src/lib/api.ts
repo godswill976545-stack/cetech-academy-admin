@@ -1,7 +1,13 @@
 import axios, { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 
+const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+const isLocalConfiguredUrl = configuredApiUrl?.includes('localhost') || configuredApiUrl?.includes('127.0.0.1');
+const apiBaseUrl = typeof window !== 'undefined' && isLocalConfiguredUrl
+  ? `${window.location.origin}/api`
+  : configuredApiUrl || (typeof window !== 'undefined' ? `${window.location.origin}/api` : '/api');
+
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api',
+  baseURL: apiBaseUrl,
   headers: {
     'X-Requested-With': 'XMLHttpRequest',
   },

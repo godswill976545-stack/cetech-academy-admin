@@ -6,7 +6,9 @@ export const GET = withAdminAuth(async (_req: NextRequest, pool: Pool) => {
   const { searchParams } = new URL(_req.url);
   const track = searchParams.get('track');
 
-  const conditions: string[] = [`role = ANY(ARRAY['ADMIN', 'STAFF', 'SUPER_ADMIN'])`];
+  const conditions: string[] = [
+    `UPPER(BTRIM(role::text)) IN ('ADMIN', 'STAFF', 'SUPER_ADMIN', 'TUTOR')`,
+  ];
   const params: unknown[] = [];
   let paramIdx = 1;
 
@@ -15,25 +17,26 @@ export const GET = withAdminAuth(async (_req: NextRequest, pool: Pool) => {
     params.push(`{${track}}`);
   }
 
+  const whereClause = conditions.join(' AND ');
   const sql = `SELECT id, email, full_name, role, assigned_tracks, student_code, is_verified, payment_status, created_at
                FROM users
-               WHERE ${conditions.join(' AND ')}
+               WHERE ${whereClause}
                ORDER BY created_at DESC`;
 
   const countRes = await pool.query(
-    `SELECT COUNT(*) as count FROM users WHERE ${conditions.join(' AND ')}`,
+    `SELECT COUNT(*) as count FROM users WHERE ${whereClause}`,
     params
   );
-  const count = parseInt(countRes.rows[0].count);
+  const count = parseInt(countRes.rows[0].count, 10);
 
   const { rows: users } = await pool.query(sql, params);
 
-  const transformedStaff = users.map(user => ({
+  const transformedStaff = users.map((user) => ({
     id: user.id,
-    name: user.full_name || user.email.split('@')[0],
-    email: user.email,
-    role: (user.role || 'staff').toLowerCase(),
-    assignedTracks: user.assigned_tracks || [],
+    name: user.full_name || user.email?.split('@')[0] || 'Unknown user',
+    email: user.email || '',
+    role: (user.role || 'STAFF').toString().trim().toLowerCase(),
+    assignedTracks: Array.isArray(user.assigned_tracks) ? user.assigned_tracks : [],
     studentCode: user.student_code,
     status: user.is_verified ? 'active' : 'invited',
     joinedDate: user.created_at,
