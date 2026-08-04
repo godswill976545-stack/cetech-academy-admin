@@ -85,7 +85,7 @@ export const POST = withAdminAuth(async (req: NextRequest, pool: Pool, user: any
     `INSERT INTO admin_invitations (email, role, invited_by, token, assigned_tracks, expires_at, created_at)
      VALUES ($1, $2, $3, $4, $5, $6, NOW())
      RETURNING id, email, role, token, expires_at, created_at`,
-    [emailLower, role, user.id, token, assignedTracks || []]
+    [emailLower, role, user.id, token, assignedTracks || [], expiresAt]
   );
 
   const invitation = insertRes.rows[0];
